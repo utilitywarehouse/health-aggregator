@@ -12,11 +12,11 @@ Table of Contents
   * [Usage](#usage)
   * [Endpoints](#endpoints)
     * [GET /namespaces](#get-namespaces)
-    * [GET /namespaces/{namespace}/services](#get-namespaces-namespace-services)
+    * [GET /namespaces/{namespace}/services](#get-namespacesnamespaceservices)
     * [GET /services](#get-services)
-    * [GET /namespaces/{namespace}/services/{service}/checks](#get-namespaces-namespace-services-service-checks)
-    * [GET /namespaces/{namespace}/services/checks](#get-namespaces-namespace-services-checks)
-    * [POST /namespaces](#post-reload)
+    * [GET /namespaces/{namespace}/services/{service}/checks](#get-namespacesnamespaceservicesservicechecks)
+    * [GET /namespaces/{namespace}/services/checks](#get-namespacesnamespaceserviceschecks)
+    * [POST /reload](#post-reload)
   * [License](#license)
 
 
