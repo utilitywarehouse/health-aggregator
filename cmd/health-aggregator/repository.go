@@ -6,13 +6,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	log "github.com/sirupsen/logrus"
 )
-
-// ErrorNoSuchNamespace returned when namespace not found
-var ErrorNoSuchNamespace error = errors.New("namespace does not exist")
 
 func upsertServiceConfigs(mgoRepo *MongoRepository, services chan service, errs chan error) {
 
@@ -127,14 +123,6 @@ func findAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]service
 
 	collection := repoCopy.db().C(servicesCollection)
 
-	var n namespace
-	if err := collection.Find(bson.M{"namespace": ns}).One(&n); err != nil {
-		if errors.Cause(err).Error() == mgo.ErrNotFound.Error() {
-			return nil, ErrorNoSuchNamespace
-		}
-		return nil, fmt.Errorf("failed to get all services for namespace %s", ns)
-	}
-
 	var svcs []service
 	if err := collection.Find(bson.M{"namespace": ns}).All(&svcs); err != nil {
 		return nil, fmt.Errorf("failed to get all services for namespace %s", ns)
@@ -161,15 +149,41 @@ func findAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository) ([]service
 	return svcs, nil
 }
 
-func findAllChecksForService(mgoRepo *MongoRepository, s string) ([]healthcheckResp, error) {
+func findAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]healthcheckResp, error) {
 	repoCopy := mgoRepo.WithNewSession()
 	defer repoCopy.Close()
 
 	collection := repoCopy.db().C(healthchecksCollection)
 
 	var checks []healthcheckResp
-	if err := collection.Find(bson.M{"service.name": s}).Limit(50).Sort("-checkTime").All(&checks); err != nil {
-		return nil, fmt.Errorf("failed to get all healthcheck responses for service %v", s)
+	if err := collection.Find(bson.M{"service.namespace": n, "service.name": s}).Limit(50).Sort("-checkTime").All(&checks); err != nil {
+		return nil, fmt.Errorf("failed to get all healthcheck responses for service %v in namespace %v", s, n)
+	}
+
+	if checks == nil {
+		checks = []healthcheckResp{}
+	}
+
+	return checks, nil
+}
+
+func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthcheckResp, error) {
+	repoCopy := mgoRepo.WithNewSession()
+	defer repoCopy.Close()
+
+	collection := repoCopy.db().C(healthchecksCollection)
+	pipeline := []bson.M{
+		{"$match": bson.M{"service.namespace": n}},
+		{"$sort": bson.M{"checkTime": -1}},
+		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$push": "$$ROOT"}}},
+		{"$replaceRoot": bson.M{"newRoot": bson.M{"$arrayElemAt": []interface{}{"$checks", 0}}}}}
+
+	pipe := collection.Pipe(pipeline)
+
+	var checks []healthcheckResp
+	err := pipe.All(&checks)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all healthcheck responses for service within namespace %v", n)
 	}
 
 	if checks == nil {

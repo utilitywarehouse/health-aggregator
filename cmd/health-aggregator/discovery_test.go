@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,13 +59,11 @@ func TestGetHealthAnnotations(t *testing.T) {
 	if err != nil {
 		assert.Fail(t, "Error getting namespace.")
 	}
-	fmt.Println(*s)
 
 	retrievedAnnotations, err = getHealthAnnotations(*s)
 	if err != nil {
 		assert.Fail(t, "Error getting annotations from namespace.")
 	}
-	fmt.Println(retrievedAnnotations)
 	assert.Equal(t, "false", retrievedAnnotations.EnableScrape)
 	assert.Equal(t, "8081", retrievedAnnotations.Port)
 }

@@ -57,16 +57,8 @@ func getServicesForNameSpace(mgoRepo *MongoRepository) func(w http.ResponseWrite
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		ns := vars["namespace"]
-
 		svcs, err := findAllServicesForNameSpace(mgoRepo, ns)
 		if err != nil {
-			if err == ErrorNoSuchNamespace {
-				log.WithField("namespace", ns).
-					WithError(err).
-					Info()
-				errorWithJSON(w, err.Error(), http.StatusNotFound)
-				return
-			}
 			log.WithField("namespace", ns).
 				WithError(err).
 				Errorf("database error - failed to get services for namespace")
@@ -87,12 +79,13 @@ func getServicesForNameSpace(mgoRepo *MongoRepository) func(w http.ResponseWrite
 	}
 }
 
-func getChecksForService(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+func getAllChecksForService(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
+		n := vars["namespace"]
 		s := vars["service"]
 
-		checks, err := findAllChecksForService(mgoRepo, s)
+		checks, err := findAllChecksForService(mgoRepo, n, s)
 		if err != nil {
 			log.WithField("service", s).
 				WithError(err).
@@ -104,6 +97,33 @@ func getChecksForService(mgoRepo *MongoRepository) func(w http.ResponseWriter, r
 		respBody, err := json.MarshalIndent(checks, "", "  ")
 		if err != nil {
 			log.WithField("service", s).
+				WithError(err).
+				Errorf("Json marshal error")
+			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
+			return
+		}
+
+		responseWithJSON(w, respBody, http.StatusOK)
+	}
+}
+
+func getLatestChecksForNamespace(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		n := vars["namespace"]
+
+		checks, err := findLatestChecksForNamespace(mgoRepo, n)
+		if err != nil {
+			log.WithField("namespace", n).
+				WithError(err).
+				Errorf("Database error")
+			errorWithJSON(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+
+		respBody, err := json.MarshalIndent(checks, "", "  ")
+		if err != nil {
+			log.WithField("namespace", n).
 				WithError(err).
 				Errorf("Json marshal error")
 			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)

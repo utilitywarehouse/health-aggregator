@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	dropDB  = true
+	dropDB  = false
 	gitHash string // populated at compile time
 )
 
@@ -65,7 +65,7 @@ type check struct {
 	Impact string `json:"impact" bson:"impact"`
 }
 
-type handler struct {
+type reloadHandler struct {
 	discovery *serviceDiscovery
 }
 
@@ -156,7 +156,7 @@ func main() {
 		responses := make(chan healthcheckResp, 1000)
 
 		s := &serviceDiscovery{client: kubeClient.client, label: "app", namespaces: namespaces, services: services, errors: errs}
-		h := handler{discovery: s}
+		reloadHandler := reloadHandler{discovery: s}
 
 		go initHTTPServer(*opsPort, mgoSess)
 		go s.getClusterHealthcheckConfig()
@@ -181,12 +181,8 @@ func main() {
 			}
 		}()
 
-		r := mux.NewRouter()
-		r.HandleFunc("/services", getAllServices(mgoRepo)).Methods("GET")
-		r.HandleFunc("/namespaces", getAllNamespaces(mgoRepo)).Methods("GET")
-		r.HandleFunc("/namespaces/{namespace}/services", getServicesForNameSpace(mgoRepo)).Methods("GET")
-		r.HandleFunc("/reload", h.reload()).Methods("POST")
-		r.HandleFunc("/services/{service}/checks", getChecksForService(mgoRepo)).Methods("GET")
+		r := NewAPIRouter(mgoRepo)
+		r.HandleFunc("/reload", reloadHandler.reload()).Methods("POST")
 
 		log.Printf("Listening on [%v].\n", *port)
 		err = http.ListenAndServe(":"+*port, r)
@@ -197,7 +193,19 @@ func main() {
 	app.Run(os.Args)
 }
 
-func (h handler) reload() func(w http.ResponseWriter, r *http.Request) {
+// NewAPIRouter creates http router
+func NewAPIRouter(mgoRepo *MongoRepository) *mux.Router {
+	r := mux.NewRouter()
+
+	r.HandleFunc("/services", getAllServices(mgoRepo)).Methods(http.MethodGet)
+	r.HandleFunc("/namespaces", getAllNamespaces(mgoRepo)).Methods(http.MethodGet)
+	r.HandleFunc("/namespaces/{namespace}/services", getServicesForNameSpace(mgoRepo)).Methods(http.MethodGet)
+	r.HandleFunc("/namespaces/{namespace}/services/{service}/checks", getAllChecksForService(mgoRepo)).Methods(http.MethodGet)
+	r.HandleFunc("/namespaces/{namespace}/services/checks", getLatestChecksForNamespace(mgoRepo)).Methods(http.MethodGet)
+	return r
+}
+
+func (h reloadHandler) reload() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		go h.discovery.getClusterHealthcheckConfig()
 		responseWithJSON(w, []byte("{\"message\": \"ok\"}"), http.StatusOK)

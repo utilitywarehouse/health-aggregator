@@ -42,7 +42,7 @@ go install
 Set up the path to your local kubeconfig file (need cluster-wide read only permissions), e.g.: 
 
 ```sh
-export $KUBECONFIG_FILEPATH=$HOME/.kube/config
+export KUBECONFIG_FILEPATH=$HOME/.kube/config
 ```
 
 Start MongoDB: 

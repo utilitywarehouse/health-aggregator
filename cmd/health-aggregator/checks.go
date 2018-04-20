@@ -49,7 +49,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				default:
 				}
 				select {
-				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now(), Error: errText}:
+				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				default:
 				}
 				continue
@@ -64,7 +64,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
@@ -77,7 +77,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
@@ -90,7 +90,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				if resp != nil && resp.Body != nil {
@@ -109,13 +109,13 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
 				// 			}
 				// 			resp.Body.Close()
-				// 			responses <- healthcheckResp{Service: s, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now(), Error: ""}
+				// 			responses <- healthcheckResp{Service: s, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: ""}
 			}
 		}(healthchecks)
 	}
