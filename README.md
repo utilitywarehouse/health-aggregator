@@ -15,7 +15,7 @@ Table of Contents
     * [GET /namespaces/{namespace}/services](#get-namespaces-namespace-services)
     * [GET /services](#get-services)
     * [GET /namespaces/{namespace}/services/{service}/checks](#get-namespaces-namespace-services-service-checks)
-    * [GET /namespaces/services/checks](#get-namespaces-services-checks)
+    * [GET /namespaces/{namespace}/services/checks](#get-namespaces-namespace-services-checks)
     * [POST /namespaces](#post-reload)
   * [License](#license)
 
@@ -170,7 +170,7 @@ Return a list of the last 50 checks for a service sort in time descending order.
   ]
 ```
 
-### GET /namespaces/services/checks
+### GET /namespaces/{namespace}/services/checks
 
 Returns a list of the most recent check responses for each of the services in the specified namespace.
 
