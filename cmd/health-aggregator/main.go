@@ -156,7 +156,7 @@ func main() {
 		responses := make(chan healthcheckResp, 1000)
 
 		s := &serviceDiscovery{client: kubeClient.client, label: "app", namespaces: namespaces, services: services, errors: errs}
-		reloadHandler := reloadHandler{discovery: s}
+		reloader := reloadHandler{discovery: s}
 
 		go initHTTPServer(*opsPort, mgoSess)
 		go s.getClusterHealthcheckConfig()
@@ -182,7 +182,7 @@ func main() {
 		}()
 
 		r := NewAPIRouter(mgoRepo)
-		r.HandleFunc("/reload", reloadHandler.reload()).Methods("POST")
+		r.HandleFunc("/reload", reloader.reload()).Methods("POST")
 
 		log.Printf("Listening on [%v].\n", *port)
 		err = http.ListenAndServe(":"+*port, r)

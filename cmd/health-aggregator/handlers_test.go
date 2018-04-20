@@ -477,14 +477,14 @@ func generateDummyCheck(serviceName string, namespaceName string) healthcheckRes
 
 	var checks []check
 	for i := 0; i < 3; i++ {
-		check := check{
+		chk := check{
 			Name:   "Check name " + String(10),
 			Health: randomHealthState(),
 			Output: "Output " + String(10),
 			Action: "Action " + String(10),
 			Impact: "Impact " + String(10),
 		}
-		checks = append(checks, check)
+		checks = append(checks, chk)
 	}
 	checkBody.Checks = checks
 

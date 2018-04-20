@@ -15,3 +15,6 @@
 
 # Visual Studio Code files
 .vscode/
+
+# The built golang binary
+health-aggregator
