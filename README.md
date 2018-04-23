@@ -135,37 +135,37 @@ Return a list of the last 50 checks for a service sort in time descending order.
         "healthAnnotations": {
           "enableScrape": "true",
           "port": "8080"
-      }
+        }
       },
-        "checkTime": "2018-04-18T10:22:10.944Z",
-        "state": "unhealthy",
-        "stateSince": "2018-04-18T09:45:53.931Z",
-        "statusCode": 200,
-        "error": "",
-        "healthcheckBody": {
-          "name": "uw-foo",
-          "description": "Performs the foo bar baz functions",
-          "health": "unhealthy",
-          "checks": [
-            {
-              "name": "Database connectivity",
-              "health": "healthy",
-              "output": "connection to db1234.uw.systems is ok"
-            },
-            {
-              "name": "Message queue connection",
-              "health": "degraded",
-              "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
-              "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
-            },
-            {
-              "name": "SMTP server connectivity",
-              "health": "unhealthy",
-              "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
-              "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
-              "impact": "Users will not receive email notifications whenever a foo bar action is completed"
-            }
-          ]
+      "checkTime": "2018-04-18T10:22:10.944Z",
+      "state": "unhealthy",
+      "stateSince": "2018-04-18T09:45:53.931Z",
+      "statusCode": 200,
+      "error": "",
+      "healthcheckBody": {
+        "name": "uw-foo",
+        "description": "Performs the foo bar baz functions",
+        "health": "unhealthy",
+        "checks": [
+          {
+            "name": "Database connectivity",
+            "health": "healthy",
+            "output": "connection to db1234.uw.systems is ok"
+          },
+          {
+            "name": "Message queue connection",
+            "health": "degraded",
+            "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
+            "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
+          },
+          {
+            "name": "SMTP server connectivity",
+            "health": "unhealthy",
+            "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
+            "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
+            "impact": "Users will not receive email notifications whenever a foo bar action is completed"
+          }
+        ]
       }
     }
   ...
@@ -186,37 +186,37 @@ Returns a list of the most recent check responses for each of the services in th
         "healthAnnotations": {
           "enableScrape": "true",
           "port": "8080"
-      }
+        }
       },
-        "checkTime": "2018-04-18T10:22:10.944Z",
-        "state": "unhealthy",
-        "stateSince": "2018-04-18T09:45:53.931Z",
-        "statusCode": 200,
-        "error": "",
-        "healthcheckBody": {
-          "name": "uw-foo",
-          "description": "Performs the foo bar baz functions",
-          "health": "unhealthy",
-          "checks": [
-            {
-              "name": "Database connectivity",
-              "health": "healthy",
-              "output": "connection to db1234.uw.systems is ok"
-            },
-            {
-              "name": "Message queue connection",
-              "health": "degraded",
-              "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
-              "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
-            },
-            {
-              "name": "SMTP server connectivity",
-              "health": "unhealthy",
-              "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
-              "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
-              "impact": "Users will not receive email notifications whenever a foo bar action is completed"
-            }
-          ]
+      "checkTime": "2018-04-18T10:22:10.944Z",
+      "state": "unhealthy",
+      "stateSince": "2018-04-18T09:45:53.931Z",
+      "statusCode": 200,
+      "error": "",
+      "healthcheckBody": {
+        "name": "uw-foo",
+        "description": "Performs the foo bar baz functions",
+        "health": "unhealthy",
+        "checks": [
+          {
+            "name": "Database connectivity",
+            "health": "healthy",
+            "output": "connection to db1234.uw.systems is ok"
+          },
+          {
+            "name": "Message queue connection",
+            "health": "degraded",
+            "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
+            "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
+          },
+          {
+            "name": "SMTP server connectivity",
+            "health": "unhealthy",
+            "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
+            "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
+            "impact": "Users will not receive email notifications whenever a foo bar action is completed"
+          }
+        ]
       }
     }
   ...
