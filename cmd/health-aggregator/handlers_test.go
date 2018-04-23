@@ -458,7 +458,7 @@ func String(length int) string {
 	return StringWithCharset(length, charset)
 }
 
-func generateDummyCheck(serviceName string, namespaceName string) healthcheckResp {
+func generateDummyCheck(serviceName string, namespaceName string, state ...string) healthcheckResp {
 	var healthCheck healthcheckResp
 
 	var svc service
@@ -471,15 +471,22 @@ func generateDummyCheck(serviceName string, namespaceName string) healthcheckRes
 
 	var checkBody healthcheckBody
 
+	var health string
+	if len(state) > 0 {
+		health = state[0]
+	} else {
+		health = randomHealthState()
+	}
+
 	checkBody.Name = "Check Name " + String(10)
 	checkBody.Description = "Check Description " + String(10)
-	checkBody.Health = randomHealthState()
+	checkBody.Health = health
 
 	var checks []check
 	for i := 0; i < 3; i++ {
 		chk := check{
 			Name:   "Check name " + String(10),
-			Health: randomHealthState(),
+			Health: health,
 			Output: "Output " + String(10),
 			Action: "Action " + String(10),
 			Impact: "Impact " + String(10),
@@ -490,6 +497,7 @@ func generateDummyCheck(serviceName string, namespaceName string) healthcheckRes
 
 	healthCheck.Body = checkBody
 	healthCheck.CheckTime = time.Now().UTC()
+	healthCheck.State = health
 	healthCheck.Error = String(10)
 	healthCheck.StatusCode = 500
 	return healthCheck

@@ -21,6 +21,17 @@ func getHealthchecks(mgoRepo *MongoRepository, healthchecks chan service, errs c
 	}
 }
 
+func removeOldHealthchecks(mgoRepo *MongoRepository, errs chan error) {
+	err := deleteHealthchecksOlderThan(mgoRepo, 1)
+	if err != nil {
+		select {
+		case errs <- fmt.Errorf("Could not delete old healthchecks (%v)", err):
+		default:
+		}
+		return
+	}
+}
+
 type httpClient interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
@@ -49,7 +60,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				default:
 				}
 				select {
-				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+				case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				default:
 				}
 				continue
@@ -64,7 +75,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
@@ -77,7 +88,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
@@ -90,7 +101,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				if resp != nil && resp.Body != nil {
@@ -109,13 +120,13 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				// 				default:
 				// 				}
 				// 				select {
-				// 				case responses <- healthcheckResp{Service: s, Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
+				// 				case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 				// 				default:
 				// 				}
 				// 				continue
 				// 			}
 				// 			resp.Body.Close()
-				// 			responses <- healthcheckResp{Service: s, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: ""}
+				// 			responses <- healthcheckResp{Service: s, State: checkBody.Health, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: ""}
 			}
 		}(healthchecks)
 	}

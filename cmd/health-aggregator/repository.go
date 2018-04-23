@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -74,6 +75,17 @@ func insertHealthcheckResponses(mgoRepo *MongoRepository, responses chan healthc
 				defer repoCopy.Close()
 
 				collection := repoCopy.db().C(healthchecksCollection)
+
+				var prevCheckResponse healthcheckResp
+				if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
+					log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
+				}
+
+				if prevCheckResponse.State != r.State {
+					r.StateSince = r.CheckTime
+				} else {
+					r.StateSince = prevCheckResponse.StateSince
+				}
 
 				err := collection.Insert(r)
 				if err != nil {
@@ -191,4 +203,17 @@ func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthc
 	}
 
 	return checks, nil
+}
+
+func deleteHealthchecksOlderThan(mgoRepo *MongoRepository, days int) error {
+	repoCopy := mgoRepo.WithNewSession()
+	defer repoCopy.Close()
+
+	collection := repoCopy.db().C(healthchecksCollection)
+
+	if _, err := collection.RemoveAll(bson.M{"checkTime": bson.M{"$lt": time.Now().AddDate(0, 0, -days)}}); err != nil {
+		return err
+	}
+
+	return nil
 }

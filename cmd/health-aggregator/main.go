@@ -45,9 +45,11 @@ var (
 type healthcheckResp struct {
 	Service    service         `json:"service" bson:"service"`
 	CheckTime  time.Time       `json:"checkTime" bson:"checkTime"`
+	State      string          `json:"state" bson:"state"`
+	StateSince time.Time       `json:"stateSince" bson:"stateSince"`
 	StatusCode int             `json:"statusCode" bson:"statusCode"`
 	Error      string          `json:"error" bson:"error"`
-	Body       healthcheckBody `json:"healthcheckBody" bson:"healthcheckBody"`
+	Body       healthcheckBody `json:"healthcheckBody,omitempty" bson:"healthcheckBody"`
 }
 
 type healthcheckBody struct {
@@ -60,9 +62,9 @@ type healthcheckBody struct {
 type check struct {
 	Name   string `json:"name" bson:"name"`
 	Health string `json:"health" bson:"health"`
-	Output string `json:"output" bson:"output"`
-	Action string `json:"action" bson:"action"`
-	Impact string `json:"impact" bson:"impact"`
+	Output string `json:"output,omitempty" bson:"output"`
+	Action string `json:"action,omitempty" bson:"action"`
+	Impact string `json:"impact,omitempty" bson:"impact"`
 }
 
 type reloadHandler struct {
@@ -169,6 +171,14 @@ func main() {
 			for t := range ticker.C {
 				log.Printf("Scheduling healthchecks at %v", t)
 				getHealthchecks(mgoRepo, healthchecks, errs)
+			}
+		}()
+
+		tidyTicker := time.NewTicker(60 * time.Minute)
+		go func() {
+			for t := range tidyTicker.C {
+				log.Printf("Tidying old healthchecks %v", t)
+				removeOldHealthchecks(mgoRepo, errs)
 			}
 		}()
 
