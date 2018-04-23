@@ -41,6 +41,7 @@ go get ./...
 Build and install: 
 
 ```sh
+cd cmd/health-aggregator
 go build
 go install
 ```
