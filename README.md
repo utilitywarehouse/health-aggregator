@@ -138,6 +138,8 @@ Return a list of the last 50 checks for a service sort in time descending order.
       }
       },
         "checkTime": "2018-04-18T10:22:10.944Z",
+        "state": "unhealthy",
+        "stateSince": "2018-04-18T09:45:53.931Z",
         "statusCode": 200,
         "error": "",
         "healthcheckBody": {
@@ -187,6 +189,8 @@ Returns a list of the most recent check responses for each of the services in th
       }
       },
         "checkTime": "2018-04-18T10:22:10.944Z",
+        "state": "unhealthy",
+        "stateSince": "2018-04-18T09:45:53.931Z",
         "statusCode": 200,
         "error": "",
         "healthcheckBody": {
