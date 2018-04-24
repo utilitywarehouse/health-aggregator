@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/globalsign/mgo"
 	"github.com/gorilla/mux"
+
+	"github.com/globalsign/mgo"
 	"github.com/jawher/mow.cli"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
@@ -191,8 +192,13 @@ func main() {
 			}
 		}()
 
-		r := NewAPIRouter(mgoRepo)
+		r := mux.NewRouter()
 		r.HandleFunc("/reload", reloader.reload()).Methods("POST")
+		r.HandleFunc("/services", getAllServices(mgoRepo)).Methods(http.MethodGet)
+		r.HandleFunc("/namespaces", getAllNamespaces(mgoRepo)).Methods(http.MethodGet)
+		r.HandleFunc("/namespaces/{namespace}/services", getServicesForNameSpace(mgoRepo)).Methods(http.MethodGet)
+		r.HandleFunc("/namespaces/{namespace}/services/{service}/checks", getAllChecksForService(mgoRepo)).Methods(http.MethodGet)
+		r.HandleFunc("/namespaces/{namespace}/services/checks", getLatestChecksForNamespace(mgoRepo)).Methods(http.MethodGet)
 
 		log.Printf("Listening on [%v].\n", *port)
 		err = http.ListenAndServe(":"+*port, r)
@@ -201,18 +207,6 @@ func main() {
 		}
 	}
 	app.Run(os.Args)
-}
-
-// NewAPIRouter creates http router
-func NewAPIRouter(mgoRepo *MongoRepository) *mux.Router {
-	r := mux.NewRouter()
-
-	r.HandleFunc("/services", getAllServices(mgoRepo)).Methods(http.MethodGet)
-	r.HandleFunc("/namespaces", getAllNamespaces(mgoRepo)).Methods(http.MethodGet)
-	r.HandleFunc("/namespaces/{namespace}/services", getServicesForNameSpace(mgoRepo)).Methods(http.MethodGet)
-	r.HandleFunc("/namespaces/{namespace}/services/{service}/checks", getAllChecksForService(mgoRepo)).Methods(http.MethodGet)
-	r.HandleFunc("/namespaces/{namespace}/services/checks", getLatestChecksForNamespace(mgoRepo)).Methods(http.MethodGet)
-	return r
 }
 
 func (h reloadHandler) reload() func(w http.ResponseWriter, r *http.Request) {
