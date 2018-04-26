@@ -2,99 +2,80 @@ package main
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 
+	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	log "github.com/sirupsen/logrus"
 )
 
 func upsertServiceConfigs(mgoRepo *MongoRepository, services chan service, errs chan error) {
 
-	var waitGroup sync.WaitGroup
-	readers := 5
+	go func(services chan service) {
+		for s := range services {
+			repoCopy := mgoRepo.WithNewSession()
+			defer repoCopy.Close()
 
-	// Perform 5 concurrent queries against the database.
-	waitGroup.Add(readers)
-	for i := 0; i < readers; i++ {
-		go func(services chan service) {
-			defer waitGroup.Done()
-			for s := range services {
-				repoCopy := mgoRepo.WithNewSession()
-				defer repoCopy.Close()
+			collection := repoCopy.db().C(servicesCollection)
 
-				collection := repoCopy.db().C(servicesCollection)
-
-				_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
-				if err != nil {
-					log.WithError(err).Errorf("failed to insert service %s in namespace %s", s.Name, s.Namespace)
-					return
-				}
+			_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
+			if err != nil {
+				log.WithError(err).Errorf("failed to insert service %s in namespace %s", s.Name, s.Namespace)
+				return
 			}
-		}(services)
-	}
-	waitGroup.Wait()
+		}
+	}(services)
 }
 
 func upsertNamespaceConfigs(mgoRepo *MongoRepository, namespaces chan namespace, errs chan error) {
 
-	var waitGroup sync.WaitGroup
-	writers := 5
+	go func(namespaces chan namespace) {
+		for n := range namespaces {
+			repoCopy := mgoRepo.WithNewSession()
+			defer repoCopy.Close()
 
-	// Perform 5 concurrent queries against the database.
-	waitGroup.Add(writers)
-	for i := 0; i < writers; i++ {
-		go func(namespaces chan namespace) {
-			defer waitGroup.Done()
-			for n := range namespaces {
-				repoCopy := mgoRepo.WithNewSession()
-				defer repoCopy.Close()
+			collection := repoCopy.db().C(namespacesCollection)
 
-				collection := repoCopy.db().C(namespacesCollection)
-
-				_, err := collection.Upsert(bson.M{"name": n.Name}, n)
-				if err != nil {
-					log.WithError(err).Errorf("failed to insert namespace %s", n.Name)
-					return
-				}
+			_, err := collection.Upsert(bson.M{"name": n.Name}, n)
+			if err != nil {
+				log.WithError(err).Errorf("failed to insert namespace %s", n.Name)
+				return
 			}
-		}(namespaces)
-	}
-	waitGroup.Wait()
+		}
+	}(namespaces)
 }
 
 func insertHealthcheckResponses(mgoRepo *MongoRepository, responses chan healthcheckResp, errs chan error) {
 
-	writers := 5
-	for i := 0; i < writers; i++ {
-		go func(responses chan healthcheckResp) {
-			for r := range responses {
-				repoCopy := mgoRepo.WithNewSession()
-				defer repoCopy.Close()
+	go func(responses chan healthcheckResp) {
+		for r := range responses {
+			repoCopy := mgoRepo.WithNewSession()
+			defer repoCopy.Close()
 
-				collection := repoCopy.db().C(healthchecksCollection)
+			collection := repoCopy.db().C(healthchecksCollection)
 
-				var prevCheckResponse healthcheckResp
-				if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
+			var prevCheckResponse healthcheckResp
+			if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
+				if err != mgo.ErrNotFound {
 					log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
 				}
-
-				if prevCheckResponse.State != r.State {
-					r.StateSince = r.CheckTime
-				} else {
-					r.StateSince = prevCheckResponse.StateSince
-				}
-
-				err := collection.Insert(r)
-				if err != nil {
-					log.WithError(err).Errorf("failed to insert healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
-					return
-				}
 			}
-		}(responses)
-	}
+
+			if prevCheckResponse.State != r.State {
+				r.StateSince = r.CheckTime
+			} else {
+				r.StateSince = prevCheckResponse.StateSince
+			}
+
+			err := collection.Insert(r)
+			if err != nil {
+				log.WithError(err).Errorf("failed to insert healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
+				return
+			}
+		}
+	}(responses)
 }
 
 func findAllServices(mgoRepo *MongoRepository) ([]service, error) {
@@ -205,13 +186,13 @@ func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthc
 	return checks, nil
 }
 
-func deleteHealthchecksOlderThan(mgoRepo *MongoRepository, days int) error {
+func deleteHealthchecksOlderThan(removeAfterDays int, mgoRepo *MongoRepository) error {
 	repoCopy := mgoRepo.WithNewSession()
 	defer repoCopy.Close()
 
 	collection := repoCopy.db().C(healthchecksCollection)
 
-	if _, err := collection.RemoveAll(bson.M{"checkTime": bson.M{"$lt": time.Now().AddDate(0, 0, -days)}}); err != nil {
+	if _, err := collection.RemoveAll(bson.M{"checkTime": bson.M{"$lt": time.Now().AddDate(0, 0, -removeAfterDays)}}); err != nil {
 		return err
 	}
 

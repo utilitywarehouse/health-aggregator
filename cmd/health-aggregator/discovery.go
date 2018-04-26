@@ -48,31 +48,26 @@ type kubernetesClient interface {
 	Core() v1core.CoreV1Interface
 }
 
-func newKubeClient(kubeconfig, host, port, tokenPath, certPath string) *kubeClient {
+func newKubeClient(kubeConfigPath string) *kubeClient {
 
-	if kubeconfig == "" {
-		config, err := clusterConfig(host, port, tokenPath, certPath)
-		if err != nil {
-			log.WithError(err).Panic("failed to create k8s client from provided host, port, tokenPath, certPath")
-		}
-
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			log.WithError(err).Panic("failed to create k8s client from provided host, port, tokenPath, certPath")
-		}
-		return &kubeClient{client: clientset}
+	var config *rest.Config
+	var err error
+	if kubeConfigPath != "" {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+		outOfCluster = true
+	} else {
+		config, err = rest.InClusterConfig()
 	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		log.WithError(err).Panic("failed to create k8s client from provided kubeconfig")
+		log.Fatalf("Failed to create kubernetes client: %v", err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	kubeClientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.WithError(err).Panic("failed to create k8s client from provided kubeconfig")
+		log.Panic(err)
 	}
-	return &kubeClient{client: clientset}
+
+	return &kubeClient{client: kubeClientSet}
 }
 
 func clusterConfig(host string, port string, tokenPath string, certPath string) (*rest.Config, error) {

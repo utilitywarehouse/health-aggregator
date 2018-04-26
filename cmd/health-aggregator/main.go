@@ -17,15 +17,18 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
-var client = &http.Client{
-	Transport: &http.Transport{
-		MaxIdleConnsPerHost: 128,
-		Dial: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).Dial,
-	},
-}
+var (
+	client = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 128,
+			Dial: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+		},
+	}
+	outOfCluster bool
+)
 
 const (
 	appName                = "health-aggregator"
@@ -39,7 +42,6 @@ const (
 )
 
 var (
-	dropDB  = false
 	gitHash string // populated at compile time
 )
 
@@ -76,9 +78,9 @@ func main() {
 	app := cli.App("health-aggegrator", "Calls /__/health for services that expose the endpoint and aggregates the responses")
 	port := app.String(cli.StringOpt{
 		Name:   "port",
-		Value:  "8080",
 		Desc:   "Port to listen on",
 		EnvVar: "PORT",
+		Value:  "8080",
 	})
 	opsPort := app.Int(cli.IntOpt{
 		Name:   "ops-port",
@@ -86,11 +88,11 @@ func main() {
 		EnvVar: "OPS_PORT",
 		Value:  8081,
 	})
-	kubeconfig := app.String(cli.StringOpt{
+	kubeConfigPath := app.String(cli.StringOpt{
 		Name:   "kubeconfig",
-		Value:  "",
 		Desc:   "(optional) absolute path to the kubeconfig file",
 		EnvVar: "KUBECONFIG_FILEPATH",
+		Value:  "",
 	})
 	logLevel := app.String(cli.StringOpt{
 		Name:   "log-level",
@@ -104,29 +106,17 @@ func main() {
 		EnvVar: "MONGO_CONNECTION_STRING",
 		Value:  "127.0.0.1:27017/",
 	})
-	kubernetesHost := app.String(cli.StringOpt{
-		Name:   "kubernetes-service-host",
-		Value:  "",
-		Desc:   "Kubernetes service host",
-		EnvVar: "KUBERNETES_SERVICE_HOST",
+	dropDB := app.Bool(cli.BoolOpt{
+		Name:   "mongo-drop-db",
+		Desc:   "Set to true in order to drop the DB on startup",
+		EnvVar: "MONGO_DROP_DB",
+		Value:  false,
 	})
-	kubernetesPort := app.String(cli.StringOpt{
-		Name:   "kubernetes-service-port",
-		Value:  "",
-		Desc:   "Kubernetes service port",
-		EnvVar: "KUBERNETES_SERVICE_PORT",
-	})
-	kubernetesTokenPath := app.String(cli.StringOpt{
-		Name:   "kubernetes-token-path",
-		Value:  "/var/run/secrets/kubernetes.io/serviceaccount/token",
-		Desc:   "Path to the kubernetes api token",
-		EnvVar: "KUBERNETES_TOKEN_PATH",
-	})
-	kubernetesCertPath := app.String(cli.StringOpt{
-		Name:   "kubernetes-cert-path",
-		Value:  "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-		Desc:   "Path to the kubernetes cert",
-		EnvVar: "KUBERNETES_CERT_PATH",
+	removeAfterDays := app.Int(cli.IntOpt{
+		Name:   "delete-checks-after-days",
+		Desc:   "Age of check results in days after which they are deleted",
+		EnvVar: "DELETE_CHECKS_AFTER_DAYS",
+		Value:  7,
 	})
 
 	app.Before = func() {
@@ -140,17 +130,11 @@ func main() {
 			log.WithError(err).Panic("failed to connect to mongo")
 		}
 		mgoRepo := NewMongoRepository(mgoSess, dbName)
-
 		defer mgoSess.Close()
 
-		if dropDB {
-			err = mgoRepo.session.DB(dbName).DropDatabase()
-			if err != nil {
-				log.WithError(err).Panic("failed to drop database")
-			}
-		}
+		dropDatabase(*dropDB, mgoRepo)
 
-		kubeClient := newKubeClient(*kubeconfig, *kubernetesHost, *kubernetesPort, *kubernetesTokenPath, *kubernetesCertPath)
+		kubeClient := newKubeClient(*kubeConfigPath)
 
 		errs := make(chan error, 10)
 		namespaces := make(chan namespace, 10)
@@ -166,8 +150,9 @@ func main() {
 		go upsertNamespaceConfigs(mgoRepo, namespaces, errs)
 		go upsertServiceConfigs(mgoRepo, services, errs)
 
-		ticker := time.NewTicker(60 * time.Second)
 		c := newHealthChecker()
+
+		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
 				log.Printf("Scheduling healthchecks at %v", t)
@@ -179,7 +164,7 @@ func main() {
 		go func() {
 			for t := range tidyTicker.C {
 				log.Printf("Tidying old healthchecks %v", t)
-				removeOldHealthchecks(mgoRepo, errs)
+				removeHealthchecksOlderThan(*removeAfterDays, mgoRepo, errs)
 			}
 		}()
 
@@ -225,6 +210,15 @@ func setLogger(logLevel *string) {
 	log.SetLevel(lvl)
 }
 
+func dropDatabase(dropDB bool, mgoRepo *MongoRepository) {
+	err := mgoRepo.session.DB(dbName).DropDatabase()
+	if err != nil {
+		log.WithError(err).Panic("failed to drop database")
+		return
+	}
+	log.Info("drop database successful")
+}
+
 func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", opsPort), op.NewHandler(op.
 		NewStatus(appName, appDesc).
@@ -232,7 +226,8 @@ func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
 		AddLink("vcs", fmt.Sprintf("github.com/utilitywarehouse/health-aggegrator")).
 		SetRevision(gitHash).
 		AddChecker("mongo", healthcheck.NewMongoHealthCheck(mgoSess, "Unable to access mongo db")).
-		ReadyUseHealthCheck(),
+		ReadyUseHealthCheck().
+		WithInstrumentedChecks(),
 	)); err != nil {
 		log.WithError(err).Fatal("ops server has shut down")
 	}
