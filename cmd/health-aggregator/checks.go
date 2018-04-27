@@ -11,8 +11,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func getHealthchecks(mgoRepo *MongoRepository, healthchecks chan service, errs chan error) {
-	services, err := findAllServicesWithHealthScrapeEnabled(mgoRepo)
+func getHealthchecks(restrictToNamespace string, mgoRepo *MongoRepository, healthchecks chan service, errs chan error) {
+	services, err := findAllServicesWithHealthScrapeEnabled(mgoRepo, restrictToNamespace)
 	if err != nil {
 		select {
 		case errs <- fmt.Errorf("Could not get services (%v)", err):
@@ -20,7 +20,7 @@ func getHealthchecks(mgoRepo *MongoRepository, healthchecks chan service, errs c
 		}
 		return
 	}
-	log.Infof("Adding %v service to channel with %v elements\n", len(services), len(healthchecks))
+	log.Debugf("Adding %v service to channel with %v elements\n", len(services), len(healthchecks))
 	for _, s := range services {
 		healthchecks <- s
 	}
@@ -54,58 +54,58 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 	readers := 10
 	for i := 0; i < readers; i++ {
 		go func(healthchecks chan service) {
-			for s := range healthchecks {
+			for svc := range healthchecks {
 
 				if c.runLocal {
 
-					errText := fmt.Sprintf("Could not get response from %v", s.HealthcheckURL)
+					errText := fmt.Sprintf("Could not get response from %v", svc.HealthcheckURL)
 					time.Sleep(1 * time.Second)
 					select {
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
 					select {
-					case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+					case responses <- healthcheckResp{Service: svc, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 					default:
 					}
 					continue
 				}
 
-				req, err := http.NewRequest("GET", s.HealthcheckURL, nil)
+				req, err := http.NewRequest("GET", svc.HealthcheckURL, nil)
 				if err != nil {
-					errText := fmt.Sprintf("Could not get response from %v: (%v)", s.HealthcheckURL, err)
+					errText := fmt.Sprintf("Could not get response from %v: (%v)", svc.HealthcheckURL, err)
 					select {
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
 					select {
-					case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+					case responses <- healthcheckResp{Service: svc, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 					default:
 					}
 					continue
 				}
 				resp, err := c.client.Do(req)
 				if err != nil {
-					errText := fmt.Sprintf("Could not get response from %v: (%v)", s.HealthcheckURL, err)
+					errText := fmt.Sprintf("Could not get response from %v: (%v)", svc.HealthcheckURL, err)
 					select {
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
 					select {
-					case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
+					case responses <- healthcheckResp{Service: svc, State: "unhealthy", Body: healthcheckBody{}, StatusCode: 0, CheckTime: time.Now().UTC(), Error: errText}:
 					default:
 					}
 					continue
 				}
 
 				if resp.StatusCode != http.StatusOK {
-					errText := fmt.Sprintf("__/health returned %d for %s", resp.StatusCode, s.HealthcheckURL)
+					errText := fmt.Sprintf("__/health returned %d for %s", resp.StatusCode, svc.HealthcheckURL)
 					select {
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
 					select {
-					case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
+					case responses <- healthcheckResp{Service: svc, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 					default:
 					}
 					if resp != nil && resp.Body != nil {
@@ -118,19 +118,19 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 				var checkBody healthcheckBody
 
 				if err := dec.Decode(&checkBody); err != nil {
-					errText := fmt.Sprintf("Could not json decode __/health response for %s", s.HealthcheckURL)
+					errText := fmt.Sprintf("Could not json decode __/health response for %s", svc.HealthcheckURL)
 					select {
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
 					select {
-					case responses <- healthcheckResp{Service: s, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
+					case responses <- healthcheckResp{Service: svc, State: "unhealthy", Body: healthcheckBody{}, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: errText}:
 					default:
 					}
 					continue
 				}
 				resp.Body.Close()
-				responses <- healthcheckResp{Service: s, State: checkBody.Health, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: ""}
+				responses <- healthcheckResp{Service: svc, State: checkBody.Health, Body: checkBody, StatusCode: resp.StatusCode, CheckTime: time.Now().UTC(), Error: ""}
 			}
 		}(healthchecks)
 	}

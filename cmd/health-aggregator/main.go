@@ -30,7 +30,8 @@ var (
 			}).Dial,
 		},
 	}
-	outOfCluster bool
+	outOfCluster   bool
+	checkNamespace string
 )
 
 const (
@@ -104,6 +105,12 @@ func main() {
 		EnvVar: "DELETE_CHECKS_AFTER_DAYS",
 		Value:  1,
 	})
+	restrictToNamespace := app.String(cli.StringOpt{
+		Name:   "restrict-namespace",
+		Desc:   "Restrict checks to a single namespace",
+		EnvVar: "RESTRICT_NAMESPACE",
+		Value:  "",
+	})
 
 	app.Before = func() {
 		setLogger(logLevel)
@@ -141,7 +148,7 @@ func main() {
 		go func() {
 			for t := range ticker.C {
 				log.Printf("Scheduling healthchecks at %v", t)
-				getHealthchecks(mgoRepo, healthchecks, errs)
+				getHealthchecks(*restrictToNamespace, mgoRepo, healthchecks, errs)
 			}
 		}()
 

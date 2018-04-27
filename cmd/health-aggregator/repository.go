@@ -120,11 +120,17 @@ func findAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]service
 	return svcs, nil
 }
 
-func findAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository) ([]service, error) {
+func findAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository, restrictToNamespace string) ([]service, error) {
 
 	collection := mgoRepo.db().C(servicesCollection)
 
 	var svcs []service
+	if restrictToNamespace != "" {
+		if err := collection.Find(bson.M{"namespace": restrictToNamespace, "healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
+			return nil, fmt.Errorf("failed to get all service healthcheck endpoints with scrape enabled")
+		}
+		return svcs, nil
+	}
 	if err := collection.Find(bson.M{"healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
 		return nil, fmt.Errorf("failed to get all service healthcheck endpoints with scrape enabled")
 	}
