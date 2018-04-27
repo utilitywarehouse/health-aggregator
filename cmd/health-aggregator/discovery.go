@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"net"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -14,30 +12,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-type service struct {
-	Name              string            `json:"name" bson:"name"`
-	Namespace         string            `json:"namespace" bson:"namespace"`
-	HealthcheckURL    string            `json:"healthcheckURL" bson:"healthcheckURL"`
-	HealthAnnotations healthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
-}
-
-type namespace struct {
-	Name              string            `json:"name" bson:"name"`
-	HealthAnnotations healthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
-}
-
-type healthAnnotations struct {
-	EnableScrape string `json:"enableScrape" bson:"enableScrape"`
-	Port         string `json:"port" bson:"port"`
-}
-
 type serviceDiscovery struct {
 	client       kubernetesClient
 	label        string
-	namespaces   chan<- namespace
-	services     chan<- service
-	healthchecks chan<- service
-	errors       chan<- error
+	namespaces   chan namespace
+	services     chan service
+	healthchecks chan service
+	errors       chan error
 }
 
 type kubeClient struct {
@@ -70,23 +51,9 @@ func newKubeClient(kubeConfigPath string) *kubeClient {
 	return &kubeClient{client: kubeClientSet}
 }
 
-func clusterConfig(host string, port string, tokenPath string, certPath string) (*rest.Config, error) {
-	token, err := ioutil.ReadFile(tokenPath)
-	if err != nil {
-		return nil, err
-	}
-	tlsClientConfig := rest.TLSClientConfig{}
-	tlsClientConfig.CAFile = certPath
-
-	return &rest.Config{
-		Host:            "https://" + net.JoinHostPort(host, port),
-		BearerToken:     string(token),
-		TLSClientConfig: tlsClientConfig,
-	}, nil
-}
-
 func (s *serviceDiscovery) getClusterHealthcheckConfig() {
 
+	log.Info("loading namespace and service annotations")
 	defaultAnnotations := healthAnnotations{EnableScrape: defaultEnableScrape, Port: defaultPort}
 
 	namespaces, err := s.client.Core().Namespaces().List(metav1.ListOptions{})
@@ -115,6 +82,8 @@ func (s *serviceDiscovery) getClusterHealthcheckConfig() {
 			HealthAnnotations: namespaceAnnotations,
 		}
 
+		log.Debugf("Added namespace %v to channel\n", n.Name)
+
 		services, err := s.client.Core().Services(n.Name).List(metav1.ListOptions{LabelSelector: s.label})
 		if err != nil {
 			select {
@@ -128,7 +97,7 @@ func (s *serviceDiscovery) getClusterHealthcheckConfig() {
 			serviceAnnotations, err := getHealthAnnotations(svc)
 			if err != nil {
 				select {
-				case s.errors <- fmt.Errorf("Could not get namespace annotations via kubernetes api: (%v)", err):
+				case s.errors <- fmt.Errorf("Could not get service annotations via kubernetes api: (%v)", err):
 				default:
 				}
 				continue
@@ -140,8 +109,11 @@ func (s *serviceDiscovery) getClusterHealthcheckConfig() {
 				HealthcheckURL:    fmt.Sprintf("http://%s.%s:%s/__/health", svc.Name, n.Name, serviceAnnotations.Port),
 				HealthAnnotations: serviceAnnotations,
 			}
+			log.Debugf("Added service %v to channel\n", svc.Name)
 		}
 	}
+	close(s.services)
+	close(s.namespaces)
 }
 
 func getHealthAnnotations(k8sObject interface{}) (healthAnnotations, error) {

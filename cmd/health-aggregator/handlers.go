@@ -9,29 +9,69 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func getAllNamespaces(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+type reloadHandler struct {
+	discovery *serviceDiscovery
+}
+
+func newRouter(s *serviceDiscovery, mgoRepo *MongoRepository) *mux.Router {
+	r := mux.NewRouter()
+
+	reloader := reloadHandler{discovery: s}
+
+	r.Handle("/reload", withRepoCopy(mgoRepo, reloader.reload)).Methods(http.MethodPost)
+	r.Handle("/services", withRepoCopy(mgoRepo, getAllServices)).Methods(http.MethodGet)
+	r.Handle("/namespaces", withRepoCopy(mgoRepo, getAllNamespaces)).Methods(http.MethodGet)
+	r.Handle("/namespaces/{namespace}/services", withRepoCopy(mgoRepo, getServicesForNameSpace)).Methods(http.MethodGet)
+	r.Handle("/namespaces/{namespace}/services/{service}/checks", withRepoCopy(mgoRepo, getAllChecksForService)).Methods(http.MethodGet)
+	r.Handle("/namespaces/{namespace}/services/checks", withRepoCopy(mgoRepo, getLatestChecksForNamespace)).Methods(http.MethodGet)
+
+	return r
+}
+
+func withRepoCopy(mgoRepo *MongoRepository, next func(mgoRepo *MongoRepository) http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		repoCopy := mgoRepo.WithNewSession()
+		defer repoCopy.Close()
+		next(repoCopy).ServeHTTP(w, r)
+	})
+}
+
+func (h reloadHandler) reload(mgoRepo *MongoRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, sChanOpen := (<-h.discovery.services)
+		_, nChanOpen := (<-h.discovery.services)
+		if sChanOpen || nChanOpen {
+			errorWithJSON(w, "reload in progress - try again later", http.StatusServiceUnavailable)
+			return
+		}
+		// Open new channels
+		namespaces := make(chan namespace, 10)
+		services := make(chan service, 10)
+
+		// Assign new channels to
+		h.discovery.services = services
+		h.discovery.namespaces = namespaces
+		go h.discovery.getClusterHealthcheckConfig()
+		go upsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, h.discovery.errors)
+		go upsertServiceConfigs(mgoRepo.WithNewSession(), services, h.discovery.errors)
+		responseWithJSON(w, http.StatusOK, map[string]string{"message": "ok"})
+	}
+}
+
+func getAllNamespaces(mgoRepo *MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ns, err := findAllNamespaces(mgoRepo)
 		if err != nil {
-			log.WithError(err).
-				Errorf("database error - failed to get all namespaces")
+			log.WithError(err).Errorf("database error - failed to get all namespaces")
 			errorWithJSON(w, "Database error", http.StatusInternalServerError)
 			return
 		}
 
-		respBody, err := json.MarshalIndent(ns, "", "  ")
-		if err != nil {
-			log.WithError(err).
-				Errorf("Json marshal error")
-			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
-			return
-		}
-
-		responseWithJSON(w, respBody, http.StatusOK)
+		responseWithJSON(w, http.StatusOK, ns)
 	}
 }
 
-func getAllServices(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+func getAllServices(mgoRepo *MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		svcs, err := findAllServices(mgoRepo)
 		if err != nil {
@@ -41,19 +81,11 @@ func getAllServices(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *htt
 			return
 		}
 
-		respBody, err := json.MarshalIndent(svcs, "", "  ")
-		if err != nil {
-			log.WithError(err).
-				Errorf("Json marshal error")
-			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
-			return
-		}
-
-		responseWithJSON(w, respBody, http.StatusOK)
+		responseWithJSON(w, http.StatusOK, svcs)
 	}
 }
 
-func getServicesForNameSpace(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+func getServicesForNameSpace(mgoRepo *MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		ns := vars["namespace"]
@@ -66,20 +98,11 @@ func getServicesForNameSpace(mgoRepo *MongoRepository) func(w http.ResponseWrite
 			return
 		}
 
-		respBody, err := json.MarshalIndent(svcs, "", "  ")
-		if err != nil {
-			log.WithField("namespace", ns).
-				WithError(err).
-				Errorf("Json marshal error")
-			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
-			return
-		}
-
-		responseWithJSON(w, respBody, http.StatusOK)
+		responseWithJSON(w, http.StatusOK, svcs)
 	}
 }
 
-func getAllChecksForService(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+func getAllChecksForService(mgoRepo *MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		n := vars["namespace"]
@@ -94,20 +117,11 @@ func getAllChecksForService(mgoRepo *MongoRepository) func(w http.ResponseWriter
 			return
 		}
 
-		respBody, err := json.MarshalIndent(checks, "", "  ")
-		if err != nil {
-			log.WithField("service", s).
-				WithError(err).
-				Errorf("Json marshal error")
-			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
-			return
-		}
-
-		responseWithJSON(w, respBody, http.StatusOK)
+		responseWithJSON(w, http.StatusOK, checks)
 	}
 }
 
-func getLatestChecksForNamespace(mgoRepo *MongoRepository) func(w http.ResponseWriter, r *http.Request) {
+func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		n := vars["namespace"]
@@ -121,16 +135,7 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) func(w http.ResponseW
 			return
 		}
 
-		respBody, err := json.MarshalIndent(checks, "", "  ")
-		if err != nil {
-			log.WithField("namespace", n).
-				WithError(err).
-				Errorf("Json marshal error")
-			errorWithJSON(w, "Json marshal error", http.StatusInternalServerError)
-			return
-		}
-
-		responseWithJSON(w, respBody, http.StatusOK)
+		responseWithJSON(w, http.StatusOK, checks)
 	}
 }
 
@@ -140,8 +145,16 @@ func errorWithJSON(w http.ResponseWriter, message string, code int) {
 	fmt.Fprintf(w, "{message: %q}", message)
 }
 
-func responseWithJSON(w http.ResponseWriter, json []byte, code int) {
+func responseWithJSON(w http.ResponseWriter, successCode int, payload interface{}) {
+
+	respBody, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		log.WithError(err).Errorf("json marshal error")
+		errorWithJSON(w, "json marshal error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(code)
-	w.Write(json)
+	w.WriteHeader(successCode)
+	w.Write(respBody)
 }

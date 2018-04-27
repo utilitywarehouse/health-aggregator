@@ -77,8 +77,6 @@ func TestGetClusterHealthcheckConfig(t *testing.T) {
 
 	go func() {
 		s.getClusterHealthcheckConfig()
-		close(services)
-		close(namespaces)
 		close(errs)
 	}()
 

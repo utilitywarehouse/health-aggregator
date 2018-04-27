@@ -14,11 +14,10 @@ import (
 func upsertServiceConfigs(mgoRepo *MongoRepository, services chan service, errs chan error) {
 
 	go func(services chan service) {
+		defer mgoRepo.Close()
 		for s := range services {
-			repoCopy := mgoRepo.WithNewSession()
-			defer repoCopy.Close()
 
-			collection := repoCopy.db().C(servicesCollection)
+			collection := mgoRepo.db().C(servicesCollection)
 
 			_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
 			if err != nil {
@@ -32,11 +31,10 @@ func upsertServiceConfigs(mgoRepo *MongoRepository, services chan service, errs 
 func upsertNamespaceConfigs(mgoRepo *MongoRepository, namespaces chan namespace, errs chan error) {
 
 	go func(namespaces chan namespace) {
+		defer mgoRepo.Close()
 		for n := range namespaces {
-			repoCopy := mgoRepo.WithNewSession()
-			defer repoCopy.Close()
 
-			collection := repoCopy.db().C(namespacesCollection)
+			collection := mgoRepo.db().C(namespacesCollection)
 
 			_, err := collection.Upsert(bson.M{"name": n.Name}, n)
 			if err != nil {
@@ -50,9 +48,9 @@ func upsertNamespaceConfigs(mgoRepo *MongoRepository, namespaces chan namespace,
 func insertHealthcheckResponses(mgoRepo *MongoRepository, responses chan healthcheckResp, errs chan error) {
 
 	go func(responses chan healthcheckResp) {
+		repoCopy := mgoRepo.WithNewSession()
+		defer repoCopy.Close()
 		for r := range responses {
-			repoCopy := mgoRepo.WithNewSession()
-			defer repoCopy.Close()
 
 			collection := repoCopy.db().C(healthchecksCollection)
 
@@ -79,10 +77,8 @@ func insertHealthcheckResponses(mgoRepo *MongoRepository, responses chan healthc
 }
 
 func findAllServices(mgoRepo *MongoRepository) ([]service, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(servicesCollection)
+	collection := mgoRepo.db().C(servicesCollection)
 
 	var services []service
 	if err := collection.Find(bson.M{}).All(&services); err != nil {
@@ -93,10 +89,8 @@ func findAllServices(mgoRepo *MongoRepository) ([]service, error) {
 }
 
 func findAllNamespaces(mgoRepo *MongoRepository) ([]namespace, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(namespacesCollection)
+	collection := mgoRepo.db().C(namespacesCollection)
 
 	var ns []namespace
 	if err := collection.Find(bson.M{}).All(&ns); err != nil {
@@ -111,10 +105,8 @@ func findAllNamespaces(mgoRepo *MongoRepository) ([]namespace, error) {
 }
 
 func findAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]service, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(servicesCollection)
+	collection := mgoRepo.db().C(servicesCollection)
 
 	var svcs []service
 	if err := collection.Find(bson.M{"namespace": ns}).All(&svcs); err != nil {
@@ -129,10 +121,8 @@ func findAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]service
 }
 
 func findAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository) ([]service, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(servicesCollection)
+	collection := mgoRepo.db().C(servicesCollection)
 
 	var svcs []service
 	if err := collection.Find(bson.M{"healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
@@ -143,10 +133,8 @@ func findAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository) ([]service
 }
 
 func findAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]healthcheckResp, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(healthchecksCollection)
+	collection := mgoRepo.db().C(healthchecksCollection)
 
 	var checks []healthcheckResp
 	if err := collection.Find(bson.M{"service.namespace": n, "service.name": s}).Limit(50).Sort("-checkTime").All(&checks); err != nil {
@@ -161,10 +149,9 @@ func findAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]he
 }
 
 func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthcheckResp, error) {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(healthchecksCollection)
+	collection := mgoRepo.db().C(healthchecksCollection)
+
 	pipeline := []bson.M{
 		{"$match": bson.M{"service.namespace": n}},
 		{"$sort": bson.M{"checkTime": -1}},
@@ -187,10 +174,8 @@ func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthc
 }
 
 func deleteHealthchecksOlderThan(removeAfterDays int, mgoRepo *MongoRepository) error {
-	repoCopy := mgoRepo.WithNewSession()
-	defer repoCopy.Close()
 
-	collection := repoCopy.db().C(healthchecksCollection)
+	collection := mgoRepo.db().C(healthchecksCollection)
 
 	if _, err := collection.RemoveAll(bson.M{"checkTime": bson.M{"$lt": time.Now().AddDate(0, 0, -removeAfterDays)}}); err != nil {
 		return err

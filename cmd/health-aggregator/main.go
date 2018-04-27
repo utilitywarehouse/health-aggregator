@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gorilla/handlers"
 
 	"github.com/globalsign/mgo"
 	"github.com/jawher/mow.cli"
@@ -45,48 +48,31 @@ var (
 	gitHash string // populated at compile time
 )
 
-type healthcheckResp struct {
-	Service    service         `json:"service" bson:"service"`
-	CheckTime  time.Time       `json:"checkTime" bson:"checkTime"`
-	State      string          `json:"state" bson:"state"`
-	StateSince time.Time       `json:"stateSince" bson:"stateSince"`
-	StatusCode int             `json:"statusCode" bson:"statusCode"`
-	Error      string          `json:"error" bson:"error"`
-	Body       healthcheckBody `json:"healthcheckBody,omitempty" bson:"healthcheckBody"`
-}
-
-type healthcheckBody struct {
-	Name        string  `json:"name" bson:"name"`
-	Description string  `json:"description" bson:"description"`
-	Health      string  `json:"health" bson:"health"`
-	Checks      []check `json:"checks" bson:"checks"`
-}
-
-type check struct {
-	Name   string `json:"name" bson:"name"`
-	Health string `json:"health" bson:"health"`
-	Output string `json:"output,omitempty" bson:"output"`
-	Action string `json:"action,omitempty" bson:"action"`
-	Impact string `json:"impact,omitempty" bson:"impact"`
-}
-
-type reloadHandler struct {
-	discovery *serviceDiscovery
-}
-
 func main() {
 	app := cli.App("health-aggegrator", "Calls /__/health for services that expose the endpoint and aggregates the responses")
-	port := app.String(cli.StringOpt{
+	port := app.Int(cli.IntOpt{
 		Name:   "port",
 		Desc:   "Port to listen on",
 		EnvVar: "PORT",
-		Value:  "8080",
+		Value:  8080,
 	})
 	opsPort := app.Int(cli.IntOpt{
 		Name:   "ops-port",
 		Desc:   "The HTTP ops port",
 		EnvVar: "OPS_PORT",
 		Value:  8081,
+	})
+	writeTimeout := app.Int(cli.IntOpt{
+		Name:   "write-timeout",
+		Desc:   "The WriteTimeout for HTTP connections",
+		EnvVar: "HTTP_WRITE_TIMEOUT",
+		Value:  15,
+	})
+	readTimeout := app.Int(cli.IntOpt{
+		Name:   "read-timeout",
+		Desc:   "The ReadTimeout for HTTP connections",
+		EnvVar: "HTTP_READ_TIMEOUT",
+		Value:  15,
 	})
 	kubeConfigPath := app.String(cli.StringOpt{
 		Name:   "kubeconfig",
@@ -116,7 +102,7 @@ func main() {
 		Name:   "delete-checks-after-days",
 		Desc:   "Age of check results in days after which they are deleted",
 		EnvVar: "DELETE_CHECKS_AFTER_DAYS",
-		Value:  7,
+		Value:  1,
 	})
 
 	app.Before = func() {
@@ -143,12 +129,11 @@ func main() {
 		responses := make(chan healthcheckResp, 1000)
 
 		s := &serviceDiscovery{client: kubeClient.client, label: "app", namespaces: namespaces, services: services, errors: errs}
-		reloader := reloadHandler{discovery: s}
 
 		go initHTTPServer(*opsPort, mgoSess)
 		go s.getClusterHealthcheckConfig()
-		go upsertNamespaceConfigs(mgoRepo, namespaces, errs)
-		go upsertServiceConfigs(mgoRepo, services, errs)
+		go upsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
+		go upsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
 
 		c := newHealthChecker()
 
@@ -177,27 +162,33 @@ func main() {
 			}
 		}()
 
-		r := mux.NewRouter()
-		r.HandleFunc("/reload", reloader.reload()).Methods("POST")
-		r.HandleFunc("/services", getAllServices(mgoRepo)).Methods(http.MethodGet)
-		r.HandleFunc("/namespaces", getAllNamespaces(mgoRepo)).Methods(http.MethodGet)
-		r.HandleFunc("/namespaces/{namespace}/services", getServicesForNameSpace(mgoRepo)).Methods(http.MethodGet)
-		r.HandleFunc("/namespaces/{namespace}/services/{service}/checks", getAllChecksForService(mgoRepo)).Methods(http.MethodGet)
-		r.HandleFunc("/namespaces/{namespace}/services/checks", getLatestChecksForNamespace(mgoRepo)).Methods(http.MethodGet)
+		router := newRouter(s, mgoRepo)
+		allowedCORSMethods := handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
+		allowedCORSOrigins := handlers.AllowedOrigins([]string{"*"})
+		server := newHTTPServer(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
+		go startHTTPServer(server)
 
-		log.Printf("Listening on [%v].\n", *port)
-		err = http.ListenAndServe(":"+*port, r)
-		if err != nil {
-			log.Fatalf("ERROR: Web server failed: error=(%v).\n", err)
-		}
+		graceful(server, 10)
 	}
 	app.Run(os.Args)
 }
 
-func (h reloadHandler) reload() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		go h.discovery.getClusterHealthcheckConfig()
-		responseWithJSON(w, []byte("{\"message\": \"ok\"}"), http.StatusOK)
+func graceful(hs *http.Server, timeout time.Duration) {
+	stop := make(chan os.Signal, 1)
+
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	log.Info("Shutting down ")
+
+	if err := hs.Shutdown(ctx); err != nil {
+		log.WithError(err).Error("Error shutting down server")
+	} else {
+		log.Info("Server stopped")
 	}
 }
 

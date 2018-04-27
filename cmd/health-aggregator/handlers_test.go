@@ -50,7 +50,7 @@ func TestGetAllNamespacesReturnsEmptyListWhenDBEmpty(t *testing.T) {
 	defer repoCopy.Close()
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllNamespaces(s.repo))
+	handler := http.HandlerFunc(getAllNamespaces(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -75,12 +75,12 @@ func TestGetAllNamespaces(t *testing.T) {
 
 	ns1 := namespace{Name: String(10), HealthAnnotations: healthAnnotations{Port: "8080", EnableScrape: "true"}}
 	ns2 := namespace{Name: String(10), HealthAnnotations: healthAnnotations{Port: "8081", EnableScrape: "false"}}
-	insertItem(s.repo, ns1)
-	insertItem(s.repo, ns2)
+	insertItem(repoCopy, ns1)
+	insertItem(repoCopy, ns2)
 	createdNamespaces := []namespace{ns1, ns2}
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllNamespaces(s.repo))
+	handler := http.HandlerFunc(getAllNamespaces(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -109,7 +109,7 @@ func TestGetAllServicesReturnsEmptyListWhenDBEmpty(t *testing.T) {
 	defer repoCopy.Close()
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllServices(s.repo))
+	handler := http.HandlerFunc(getAllServices(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -133,12 +133,12 @@ func TestGetAllServices(t *testing.T) {
 
 	s1 := service{Name: String(10), Namespace: String(10), HealthAnnotations: healthAnnotations{Port: "8080", EnableScrape: "true"}}
 	s2 := service{Name: String(10), Namespace: String(10), HealthAnnotations: healthAnnotations{Port: "8081", EnableScrape: "false"}}
-	insertItem(s.repo, s1)
-	insertItem(s.repo, s2)
+	insertItem(repoCopy, s1)
+	insertItem(repoCopy, s2)
 	createdServices := []service{s1, s2}
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllServices(s.repo))
+	handler := http.HandlerFunc(getAllServices(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -171,13 +171,13 @@ func TestGetServicesForNamespace(t *testing.T) {
 	s1 := service{Name: String(10), Namespace: ns1, HealthAnnotations: healthAnnotations{Port: "8080", EnableScrape: "true"}}
 	s2 := service{Name: String(10), Namespace: ns1, HealthAnnotations: healthAnnotations{Port: "8081", EnableScrape: "false"}}
 	s3 := service{Name: String(10), Namespace: ns2, HealthAnnotations: healthAnnotations{Port: "8081", EnableScrape: "false"}}
-	insertItem(s.repo, s1)
-	insertItem(s.repo, s2)
-	insertItem(s.repo, s3)
+	insertItem(repoCopy, s1)
+	insertItem(repoCopy, s2)
+	insertItem(repoCopy, s3)
 	ns1Services := []service{s1, s2}
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getServicesForNameSpace(s.repo))
+	handler := http.HandlerFunc(getServicesForNameSpace(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -211,7 +211,7 @@ func TestGetServicesForNamespaceReturnsEmptyListWhenNoneExist(t *testing.T) {
 	ns := String(10)
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getServicesForNameSpace(s.repo))
+	handler := http.HandlerFunc(getServicesForNameSpace(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -236,7 +236,7 @@ func TestGetAllChecksForServiceReturnsEmptyListWhenNoneExist(t *testing.T) {
 	svc := String(10)
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllChecksForService(s.repo))
+	handler := http.HandlerFunc(getAllChecksForService(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -274,14 +274,14 @@ func TestGetAllChecksForService(t *testing.T) {
 
 	// Create a check against a service with the same name, but within a different namespace
 	chk4 := generateDummyCheck(s1Name, ns2Name)
-	insertItems(s.repo, chk1, chk2, chk3, chk4)
+	insertItems(repoCopy, chk1, chk2, chk3, chk4)
 
 	// We only expect checks returned for a specific service within a specific namespace
 	expectedHealthChecks := []healthcheckResp{chk1, chk2}
 
 	// Make the request
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getAllChecksForService(s.repo))
+	handler := http.HandlerFunc(getAllChecksForService(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -334,7 +334,7 @@ func TestGetLatestChecksForNamespaceReturnsEmptyListWhenNoneExist(t *testing.T) 
 	ns := String(10)
 
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getLatestChecksForNamespace(s.repo))
+	handler := http.HandlerFunc(getLatestChecksForNamespace(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
@@ -376,14 +376,14 @@ func TestGetLatestChecksForNamespace(t *testing.T) {
 
 	// Create a check against a service with the same name, but within a different namespace
 	chk5 := generateDummyCheck(s1Name, ns2Name)
-	insertItems(s.repo, chk1, chk2, chk3, chk4, chk5)
+	insertItems(repoCopy, chk1, chk2, chk3, chk4, chk5)
 
 	// We only expect the LATEST checks to be returned, and only the ones for this namespace
 	expectedHealthChecks := []healthcheckResp{chk2, chk4}
 
 	// Make the request
 	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getLatestChecksForNamespace(s.repo))
+	handler := http.HandlerFunc(getLatestChecksForNamespace(repoCopy))
 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
