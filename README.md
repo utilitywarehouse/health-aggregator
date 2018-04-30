@@ -4,6 +4,7 @@ Health Aggregator
 A service aggregating health endpoint information from our kubernetes cluster.
 
 [![MIT licensed][shield-license]](https://github.com/utilitywarehouse/health-aggregator/blob/master/LICENSE)
+[![CircleCI](https://circleci.com/gh/utilitywarehouse/health-aggregator.svg?style=svg)](https://circleci.com/gh/utilitywarehouse/health-aggregator)
 
 Table of Contents
 -----------------
