@@ -96,7 +96,6 @@ Return a list of namespaces for the cluster, including the health aggregator set
         "port": "8080"
       }
     }
-    ...
   ]
 ```
 
@@ -115,7 +114,6 @@ Return a list of services for a given namespace, including the health aggregator
         "port": "8080"
       }
     }
-    ...
   ]
 ```
 
@@ -134,7 +132,6 @@ Return a list of all services for the cluster, including the health aggregator s
         "port": "8080"
       }
     }
-    ...
   ]
 ```
 
@@ -185,7 +182,6 @@ Return a list of the last 50 checks for a service sort in time descending order.
         ]
       }
     }
-  ...
   ]
 ```
 
@@ -236,7 +232,6 @@ Returns a list of the most recent check responses for each of the services in th
         ]
       }
     }
-  ...
   ]
 ```
 
