@@ -22,7 +22,6 @@ Table of Contents
 
 Requirements
 ------------
-
 Health Aggregator requires the following to run:
 
 * [Golang][golang] 1.9+
