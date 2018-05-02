@@ -62,8 +62,6 @@ jobs:
     steps:
         - run:
             command: TAG=$CIRCLE_SHA1 IMAGE=$UW_DOCKER_REGISTRY/$NAMESPACE/$SERVICE /run.sh
-            environment:
-              RESTRICT_NAMESPACE: smartmetering
 
 workflows:
   version: 2

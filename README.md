@@ -30,7 +30,6 @@ Health Aggregator requires the following to run:
 Usage
 -----
 
-**Running Locally**
 From the root directory, go get all dependencies:
 
 ```sh
@@ -43,6 +42,8 @@ Build, test and install:
 make all
 ```
 
+### Running out of cluster (locally)
+
 Set up the path to your local kubeconfig file (need cluster-wide read only permissions), e.g.:
 
 ```sh
@@ -51,7 +52,14 @@ export KUBECONFIG_FILEPATH=$HOME/.kube/config
 
 Note that http calls to service health checks cannot be carried out when outside the cluster, so the responses are faked when the app detects that it is running out of cluster.
 
-Other optional params:
+### Running in cluster
+
+```sh
+export KUBERNETES_SERVICE_HOST="elb.master.k8s.dev.uw.systems"
+export KUBERNETES_SERVICE_PORT="8443"
+```
+
+### Other optional params
 
 ```
 health-aggregator --help
@@ -67,13 +75,13 @@ health-aggregator --help
       --delete-checks-after-days   Age of check results in days after which they are deleted (env $DELETE_CHECKS_AFTER_DAYS) (default 7)
 ```
 
-Start MongoDB:
+### Start MongoDB
 
 ```sh
 docker-compose up -d
 ```
 
-Start the app:
+### Start the app
 
 ```sh
 health-aggregator

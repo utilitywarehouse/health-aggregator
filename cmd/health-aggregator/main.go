@@ -109,7 +109,7 @@ func main() {
 		Name:   "restrict-namespace",
 		Desc:   "Restrict checks to a single namespace",
 		EnvVar: "RESTRICT_NAMESPACE",
-		Value:  "smartmetering",
+		Value:  "",
 	})
 
 	app.Before = func() {
