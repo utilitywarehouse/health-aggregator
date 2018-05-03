@@ -120,7 +120,7 @@ func main() {
 
 		mgoSess, err := mgo.DialWithTimeout(*dbURL, 1*time.Second)
 		if err != nil {
-			log.WithError(err).Panic("failed to connect to mongo using connection string %v", dbURL)
+			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
 		}
 		mgoRepo := NewMongoRepository(mgoSess, dbName)
 		defer mgoSess.Close()
