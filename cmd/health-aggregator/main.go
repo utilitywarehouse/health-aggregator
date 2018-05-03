@@ -38,7 +38,7 @@ const (
 	appName                = "health-aggregator"
 	appDesc                = "This app aggregates the health of apps across k8s namespaces for a cluster."
 	defaultEnableScrape    = "true"
-	defaultPort            = "8080"
+	defaultPort            = "8081"
 	servicesCollection     = "services"
 	namespacesCollection   = "namespaces"
 	healthchecksCollection = "checks"
