@@ -1,0 +1,63 @@
+<html>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>    </head>
+    <body>
+        <div class="container-fluid d-flex flex-wrap">
+            {{range .Checks}}
+            <div id="accordion-{{.Service.Name}}" class="w-25 m-0">
+                {{if eq .State "healthy"}}
+                <div class="card border-success m-1">
+                {{end}}
+                {{if eq .State "unhealthy"}}
+                <div class="card border-danger m-1">
+                {{end}}
+                {{if eq .State "degraded"}}
+                <div class="card border-warning m-1">
+                {{end}}
+                    {{if eq .State "healthy"}}
+                    <div class="card-header bg-success border-light" id="heading-{{.Service.Name}}">
+                    {{end}}
+                    {{if eq .State "unhealthy"}}
+                    <div class="card-header bg-danger border-light" id="heading-{{.Service.Name}}">
+                    {{end}}
+                    {{if eq .State "degraded"}}
+                    <div class="card-header bg-warning border-light" id="heading-{{.Service.Name}}">
+                    {{end}}
+                        <h5 class="m-0">
+                            <button class="btn btn-link text-white font-weight-bold" style="overflow: hidden;text-overflow: ellipsis;max-width: 100%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
+                                {{.Service.Name}}
+                            </button>
+                        </h5>
+                    </div>
+        
+                    <div id="collapse-{{.Service.Name}}" class="collapse" aria-labelledby="heading-{{.Service.Name}}" data-parent="#accordion-{{.Service.Name}}">
+                        <div class="card-body">
+                            <dt>State</dt>
+                            <dd>{{.State}}</dd>
+                            {{if ne .State "healthy"}}
+                            {{if ne .StatusCode 0}}
+                            <dt>Status Code</dt>
+                            <dd>{{.StatusCode}}</dd>
+                            <dt>Error</dt>
+                            <dd>{{.Error}}</dd>
+                            {{else}}
+                            <dt>Error</dt>
+                            <dd>{{.Error}}</dd>
+                            {{end}}
+                            {{end}}
+                            <dt>Checked At</dt>
+                            <dd>{{.CheckTime}}</dd>
+                            <dt>This State Since</dt>
+                            <dd>{{.StateSince}}</dd>
+                            <a href="/namespaces/{{$.Namespace}}/services/{{.Service.Name}}/checks"class="btn btn-primary">History</a>
+                        </div>
+                    </div> <!-- end of collapse-{{.Service.Name}} -->
+                </div> <!-- end of card {{.Service.Name}} -->
+            </div> <!-- end of accordian {{.Service.Name}} -->
+            {{end}}
+        </div> <!-- end of container -->
+    </body>
+</html>

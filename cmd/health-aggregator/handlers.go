@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -135,7 +136,22 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			return
 		}
 
-		responseWithJSON(w, http.StatusOK, checks)
+		if r.Header.Get("Accept") == "application/json" {
+			responseWithJSON(w, http.StatusOK, checks)
+		} else {
+			var checkData templatedChecks
+			checkData.Namespace = n
+			checkData.Checks = checks
+
+			tmpl, tmplErr := template.ParseFiles("../../templates/nschecks.html")
+			if tmplErr != nil {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(500)
+				fmt.Fprint(w, "Failed to parse template")
+				return
+			}
+			tmpl.Execute(w, checkData)
+		}
 	}
 }
 

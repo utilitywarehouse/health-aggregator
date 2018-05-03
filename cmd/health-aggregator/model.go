@@ -43,3 +43,8 @@ type check struct {
 	Action string `json:"action,omitempty" bson:"action"`
 	Impact string `json:"impact,omitempty" bson:"impact"`
 }
+
+type templatedChecks struct {
+	Namespace string
+	Checks    []healthcheckResp
+}

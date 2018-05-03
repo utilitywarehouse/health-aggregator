@@ -339,6 +339,7 @@ func TestGetLatestChecksForNamespaceReturnsEmptyListWhenNoneExist(t *testing.T) 
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
 	req = mux.SetURLVars(req, map[string]string{"namespace": ns})
+	req.Header.Set("Accept", "application/json")
 
 	handler.ServeHTTP(resp, req)
 	assert.Equal(t, http.StatusOK, resp.Result().StatusCode)
@@ -388,6 +389,7 @@ func TestGetLatestChecksForNamespace(t *testing.T) {
 	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
 	require.NoError(t, reqErr)
 	req = mux.SetURLVars(req, map[string]string{"namespace": ns1Name})
+	req.Header.Set("Accept", "application/json")
 
 	handler.ServeHTTP(resp, req)
 	assert.Equal(t, http.StatusOK, resp.Result().StatusCode)
