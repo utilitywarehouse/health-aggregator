@@ -82,6 +82,7 @@ health-aggregator
 
 Endpoints
 -----
+
 ### GET /namespaces
 
 Return a list of namespaces for the cluster, including the health aggregator settings at namespace level. Namespaces are loaded at app startup or when doing a POST to `/reload`.
