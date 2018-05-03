@@ -8,6 +8,7 @@ A service aggregating health endpoint information from our kubernetes cluster.
 
 Table of Contents
 -----------------
+
 * [Requirements](#requirements)
 * [Usage](#usage)
 * [Endpoints](#endpoints)
