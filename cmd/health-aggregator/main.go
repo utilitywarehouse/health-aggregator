@@ -120,7 +120,7 @@ func main() {
 
 		mgoSess, err := mgo.DialWithTimeout(*dbURL, 1*time.Second)
 		if err != nil {
-			log.WithError(err).Panic("failed to connect to mongo")
+			log.WithError(err).Panic("failed to connect to mongo using connection string %v", dbURL)
 		}
 		mgoRepo := NewMongoRepository(mgoSess, dbName)
 		defer mgoSess.Close()
@@ -209,12 +209,14 @@ func setLogger(logLevel *string) {
 }
 
 func dropDatabase(dropDB bool, mgoRepo *MongoRepository) {
-	err := mgoRepo.session.DB(dbName).DropDatabase()
-	if err != nil {
-		log.WithError(err).Panic("failed to drop database")
-		return
+	if dropDB {
+		err := mgoRepo.session.DB(dbName).DropDatabase()
+		if err != nil {
+			log.WithError(err).Panic("failed to drop database")
+			return
+		}
+		log.Info("drop database successful")
 	}
-	log.Info("drop database successful")
 }
 
 func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
