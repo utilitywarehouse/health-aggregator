@@ -155,7 +155,7 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 				fmt.Fprint(w, "failed to get current working directory")
 				return
 			}
-
+			fmt.Println(filepath.Join(cwd, "../../templates/nschecks.html"))
 			tmpl, tmplErr := template.ParseFiles(filepath.Join(cwd, "../../templates/nschecks.html"))
 			if tmplErr != nil {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
