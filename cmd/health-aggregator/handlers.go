@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 
 	"github.com/alecthomas/template"
-	"github.com/pkg/errors"
 
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -147,18 +144,19 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			checkData.Namespace = n
 			checkData.Checks = checks
 
-			cwd, cwdErr := os.Getwd()
-			if cwdErr != nil {
-				log.WithError(errors.Wrap(err, "failed to get current working directory"))
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(500)
-				fmt.Fprint(w, "failed to get current working directory")
-				return
-			}
+			// cwd, cwdErr := os.Getwd()
+			// if cwdErr != nil {
+			// 	log.WithError(errors.Wrap(err, "failed to get current working directory"))
+			// 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			// 	w.WriteHeader(500)
+			// 	fmt.Fprint(w, "failed to get current working directory")
+			// 	return
+			// }
 
-			tmpl, tmplErr := template.ParseFiles(filepath.Join(cwd, "templates/nschecks.html"))
+			//tmpl, tmplErr := template.ParseFiles(filepath.Join(cwd, "templates/nschecks.html"))
+			tmpl, tmplErr := template.ParseFiles("/templates/nschecks.html")
 			if tmplErr != nil {
-				log.WithError(tmplErr).Errorf(fmt.Sprintf("failed to parse file at %s", filepath.Join(cwd, "templates/nschecks.html")))
+				//log.WithError(tmplErr).Errorf(fmt.Sprintf("failed to parse file at %s", filepath.Join(cwd, "templates/nschecks.html")))
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(500)
 				fmt.Fprint(w, "Failed to parse template")
