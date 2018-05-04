@@ -15,6 +15,8 @@ RUN make clean install
 RUN make ${SERVICE}
 
 RUN mv ${SERVICE} /${SERVICE}
+RUN mkdir /templates
+COPY ./cmd/${SERVICE}/templates/* /templates
 
 FROM alpine:3.6
 
@@ -22,7 +24,8 @@ ARG SERVICE
 
 ENV APP=${SERVICE}
 
-RUN apk add --no-cache ca-certificates && mkdir /app
+RUN apk add --no-cache ca-certificates && mkdir /app && mkdir /app/templates
 COPY --from=build /${SERVICE} /app/${SERVICE}
+COPY --from=build /templates/* /app/templates/
 
 ENTRYPOINT /app/${APP}
