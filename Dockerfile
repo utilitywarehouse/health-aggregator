@@ -26,6 +26,6 @@ ENV APP=${SERVICE}
 
 RUN apk add --no-cache ca-certificates && mkdir /app && mkdir /app/templates
 COPY --from=build /${SERVICE} /app/${SERVICE}
-COPY --from=build /templates/* /app/templates/
+COPY --from=build /templates /app/templates
 
 ENTRYPOINT /app/${APP}
