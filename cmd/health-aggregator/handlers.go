@@ -3,12 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
-	"os"
-	"path/filepath"
-
-	"github.com/pkg/errors"
 
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -147,23 +142,13 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			checkData.Namespace = n
 			checkData.Checks = checks
 
-			cwd, cwdErr := os.Getwd()
-			if cwdErr != nil {
-				log.WithError(errors.Wrap(err, "failed to get current working directory"))
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(500)
-				fmt.Fprint(w, "failed to get current working directory")
-				return
-			}
-			fmt.Println(filepath.Join(cwd, "../../templates/nschecks.html"))
-			tmpl, tmplErr := template.ParseFiles(filepath.Join(cwd, "../../templates/nschecks.html"))
+			tmplErr := templates.ExecuteTemplate(w, "nschecks.html", checkData)
 			if tmplErr != nil {
+				log.WithError(tmplErr).Errorf("failed to execute template nschecks.html")
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(500)
 				fmt.Fprint(w, "Failed to parse template")
-				return
 			}
-			tmpl.Execute(w, checkData)
 		}
 	}
 }

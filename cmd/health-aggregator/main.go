@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alecthomas/template"
 	"github.com/gorilla/handlers"
 
 	"github.com/globalsign/mgo"
@@ -32,6 +33,7 @@ var (
 	}
 	outOfCluster   bool
 	checkNamespace string
+	templates      = template.Must(template.ParseGlob("templates/*"))
 )
 
 const (
