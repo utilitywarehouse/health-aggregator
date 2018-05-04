@@ -12,7 +12,7 @@
                 <div class="card border-success m-1">
                 {{end}}
                 {{if eq .State "unhealthy"}}
-                {{if ne .StatusCode "0"}}
+                {{if ne .StatusCode 0}}
                 <div class="card border-danger m-1">
                 {{else}}
                 <div class="card border-light m-1">
@@ -25,7 +25,7 @@
                     <div class="card-header bg-success border-light" id="heading-{{.Service.Name}}">
                     {{end}}
                     {{if eq .State "unhealthy"}}
-                    {{if ne .StatusCode "0"}}
+                    {{if ne .StatusCode 0}}
                     <div class="card-header bg-danger border-danger" id="heading-{{.Service.Name}}">
                     {{else}}
                     <div class="card-header bg-danger border-light" id="heading-{{.Service.Name}}">
