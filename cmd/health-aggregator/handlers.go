@@ -158,6 +158,7 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 
 			tmpl, tmplErr := template.ParseFiles(filepath.Join(cwd, "templates/nschecks.html"))
 			if tmplErr != nil {
+				log.WithError(errors.Wrap(tmplErr, fmt.Sprintf("failed to parse file at %s", filepath.Join(cwd, "templates/nschecks.html"))))
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(500)
 				fmt.Fprint(w, "Failed to parse template")
