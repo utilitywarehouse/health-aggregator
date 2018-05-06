@@ -28,7 +28,7 @@
                     {{if ne .StatusCode 0}}
                     <div class="card-header bg-danger border-danger" id="heading-{{.Service.Name}}">
                     {{else}}
-                    <div class="card-header bg-danger border-light" id="heading-{{.Service.Name}}">
+                    <div class="card-header bg-light border-light" id="heading-{{.Service.Name}}">
                     {{end}}
                     {{end}}
                     {{if eq .State "degraded"}}
