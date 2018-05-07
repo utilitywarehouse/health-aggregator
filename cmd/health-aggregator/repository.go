@@ -169,7 +169,7 @@ func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthc
 	var checks []healthcheckResp
 	err := pipe.All(&checks)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get all healthcheck responses for service within namespace %v", n)
+		return nil, fmt.Errorf("failed to get all healthcheck responses for service within namespace %v err: %v", n, err)
 	}
 
 	if checks == nil {
