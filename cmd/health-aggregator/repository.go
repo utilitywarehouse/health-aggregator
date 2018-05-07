@@ -164,7 +164,7 @@ func findLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]healthc
 		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$push": "$$ROOT"}}},
 		{"$replaceRoot": bson.M{"newRoot": bson.M{"$arrayElemAt": []interface{}{"$checks", 0}}}}}
 
-	pipe := collection.Pipe(pipeline)
+	pipe := collection.Pipe(pipeline).AllowDiskUse()
 
 	var checks []healthcheckResp
 	err := pipe.All(&checks)
