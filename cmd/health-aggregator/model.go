@@ -20,13 +20,14 @@ type healthAnnotations struct {
 }
 
 type healthcheckResp struct {
-	Service    service         `json:"service" bson:"service"`
-	CheckTime  time.Time       `json:"checkTime" bson:"checkTime"`
-	State      string          `json:"state" bson:"state"`
-	StateSince time.Time       `json:"stateSince" bson:"stateSince"`
-	StatusCode int             `json:"statusCode" bson:"statusCode"`
-	Error      string          `json:"error" bson:"error"`
-	Body       healthcheckBody `json:"healthcheckBody,omitempty" bson:"healthcheckBody"`
+	Service       service         `json:"service" bson:"service"`
+	CheckTime     time.Time       `json:"checkTime" bson:"checkTime"`
+	State         string          `json:"state" bson:"state"`
+	StatePriority int             `json:"-"`
+	StateSince    time.Time       `json:"stateSince" bson:"stateSince"`
+	StatusCode    int             `json:"statusCode" bson:"statusCode"`
+	Error         string          `json:"error" bson:"error"`
+	Body          healthcheckBody `json:"healthcheckBody,omitempty" bson:"healthcheckBody"`
 }
 
 type healthcheckBody struct {

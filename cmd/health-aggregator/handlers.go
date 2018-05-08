@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/alecthomas/template"
 	"github.com/pkg/errors"
@@ -138,6 +139,8 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			return
 		}
 
+		sortByState(checks)
+
 		if r.Header.Get("Accept") == "application/json" {
 			responseWithJSON(w, http.StatusOK, checks)
 		} else {
@@ -162,6 +165,21 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			tmpl.Execute(w, checkData)
 		}
 	}
+}
+
+func sortByState(checks []healthcheckResp) {
+	for _, check := range checks {
+		switch check.State {
+		case "unhealthy":
+			check.StatePriority = 1
+		case "degraded":
+			check.StatePriority = 2
+		case "healthy":
+			check.StatePriority = 3
+		}
+	}
+
+	sort.Slice(checks, func(i, j int) bool { return checks[i].StatePriority < checks[j].StatePriority })
 }
 
 func errorWithJSON(w http.ResponseWriter, message string, code int) {
