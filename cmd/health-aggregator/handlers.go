@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/alecthomas/template"
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/gorilla/mux"
@@ -139,6 +140,8 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			return
 		}
 
+		// Assign a numeric value for each state for later sorting and Humanise timestamps
+		enrichChecksData(checks)
 		// We want to see the failures at the top
 		sortByState(checks)
 
@@ -169,7 +172,13 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 }
 
 func sortByState(checks []healthcheckResp) {
+	sort.Slice(checks, func(i, j int) bool { return checks[i].StatePriority < checks[j].StatePriority })
+}
+
+func enrichChecksData(checks []healthcheckResp) {
 	for idx, check := range checks {
+		checks[idx].HumanisedCheckTime = humanize.Time(check.CheckTime)
+		checks[idx].HumanisedStateSince = humanize.Time(check.StateSince)
 		switch check.State {
 		case "unhealthy":
 			checks[idx].StatePriority = 1
@@ -179,8 +188,6 @@ func sortByState(checks []healthcheckResp) {
 			checks[idx].StatePriority = 3
 		}
 	}
-
-	sort.Slice(checks, func(i, j int) bool { return checks[i].StatePriority < checks[j].StatePriority })
 }
 
 func errorWithJSON(w http.ResponseWriter, message string, code int) {
