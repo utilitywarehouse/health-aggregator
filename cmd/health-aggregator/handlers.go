@@ -139,6 +139,7 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 			return
 		}
 
+		// We want to see the failures at the top
 		sortByState(checks)
 
 		if r.Header.Get("Accept") == "application/json" {
@@ -168,14 +169,14 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 }
 
 func sortByState(checks []healthcheckResp) {
-	for _, check := range checks {
+	for idx, check := range checks {
 		switch check.State {
 		case "unhealthy":
-			check.StatePriority = 1
+			checks[idx].StatePriority = 1
 		case "degraded":
-			check.StatePriority = 2
+			checks[idx].StatePriority = 2
 		case "healthy":
-			check.StatePriority = 3
+			checks[idx].StatePriority = 3
 		}
 	}
 
