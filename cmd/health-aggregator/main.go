@@ -126,6 +126,7 @@ func main() {
 		defer mgoSess.Close()
 
 		dropDatabase(*dropDB, mgoRepo)
+		createIndex(mgoRepo)
 
 		kubeClient := newKubeClient(*kubeConfigPath)
 
@@ -216,6 +217,19 @@ func dropDatabase(dropDB bool, mgoRepo *MongoRepository) {
 			return
 		}
 		log.Info("drop database successful")
+	}
+}
+
+func createIndex(mgoRepo *MongoRepository) {
+	c := mgoRepo.db().C(healthchecksCollection)
+
+	index := mgo.Index{
+		Key: []string{"-checkTime"},
+	}
+
+	err := c.EnsureIndex(index)
+	if err != nil {
+		panic(err)
 	}
 }
 
