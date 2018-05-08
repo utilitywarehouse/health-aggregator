@@ -118,7 +118,7 @@ func main() {
 
 	app.Action = func() {
 
-		mgoSess, err := mgo.DialWithTimeout(*dbURL, 1*time.Second)
+		mgoSess, err := mgo.Dial(*dbURL)
 		if err != nil {
 			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
 		}
