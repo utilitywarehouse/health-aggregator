@@ -55,7 +55,7 @@ func (c *healthChecker) doHealthchecks(healthchecks chan service, responses chan
 	for i := 0; i < readers; i++ {
 		go func(healthchecks chan service) {
 			for svc := range healthchecks {
-
+				log.Debugf("Trying %v...", svc.HealthcheckURL)
 				if c.runLocal {
 
 					errText := fmt.Sprintf("Could not get response from %v", svc.HealthcheckURL)
