@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/alecthomas/template"
 	"github.com/dustin/go-humanize"
@@ -176,9 +177,14 @@ func sortByState(checks []healthcheckResp) {
 }
 
 func enrichChecksData(checks []healthcheckResp) {
+
 	for idx, check := range checks {
 		checks[idx].HumanisedCheckTime = humanize.Time(check.CheckTime)
 		checks[idx].HumanisedStateSince = humanize.Time(check.StateSince)
+
+		// Be lenient on those services which do not match the /health endpoint specification
+		checks[idx].State = strings.ToLower(check.State)
+
 		switch check.State {
 		case "unhealthy":
 			checks[idx].StatePriority = 1
