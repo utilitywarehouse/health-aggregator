@@ -26,6 +26,7 @@ func newRouter(s *serviceDiscovery, mgoRepo *MongoRepository) *mux.Router {
 
 	r.Handle("/reload", withRepoCopy(mgoRepo, reloader.reload)).Methods(http.MethodPost)
 	r.Handle("/services", withRepoCopy(mgoRepo, getAllServices)).Methods(http.MethodGet)
+	r.Handle("/kube-ops/ready", yo()).Methods(http.MethodGet)
 	r.Handle("/namespaces", withRepoCopy(mgoRepo, getAllNamespaces)).Methods(http.MethodGet)
 	r.Handle("/namespaces/{namespace}/services", withRepoCopy(mgoRepo, getServicesForNameSpace)).Methods(http.MethodGet)
 	r.Handle("/namespaces/{namespace}/services/{service}/checks", withRepoCopy(mgoRepo, getAllChecksForService)).Methods(http.MethodGet)
@@ -62,6 +63,15 @@ func (h reloadHandler) reload(mgoRepo *MongoRepository) http.HandlerFunc {
 		go upsertServiceConfigs(mgoRepo.WithNewSession(), services, h.discovery.errors)
 		responseWithJSON(w, http.StatusOK, map[string]string{"message": "ok"})
 	}
+}
+
+func yo() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(200)
+		fmt.Fprint(w, "Yo!")
+		return
+	})
 }
 
 func getAllNamespaces(mgoRepo *MongoRepository) http.HandlerFunc {
