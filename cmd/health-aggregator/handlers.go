@@ -185,7 +185,7 @@ func enrichChecksData(checks []healthcheckResp) {
 		// Be lenient on those services which do not match the /health endpoint specification
 		checks[idx].State = strings.ToLower(check.State)
 
-		switch check.State {
+		switch strings.ToLower(check.State) {
 		case "unhealthy":
 			checks[idx].StatePriority = 1
 		case "degraded":
