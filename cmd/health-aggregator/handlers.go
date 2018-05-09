@@ -182,8 +182,22 @@ func getLatestChecksForNamespace(mgoRepo *MongoRepository) http.HandlerFunc {
 	}
 }
 
+type byStateThenByName []healthcheckResp
+
+func (a byStateThenByName) Len() int      { return len(a) }
+func (a byStateThenByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a byStateThenByName) Less(i, j int) bool {
+	if a[i].StatePriority < a[j].StatePriority {
+		return true
+	}
+	if a[i].StatePriority > a[j].StatePriority {
+		return false
+	}
+	return a[i].Service.Name < a[j].Service.Name
+}
+
 func sortByState(checks []healthcheckResp) {
-	sort.Slice(checks, func(i, j int) bool { return checks[i].StatePriority < checks[j].StatePriority })
+	sort.Sort(byStateThenByName(checks))
 }
 
 func enrichChecksData(checks []healthcheckResp) {
