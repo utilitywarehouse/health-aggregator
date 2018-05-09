@@ -12,13 +12,29 @@
         </script>
         <style>
             .check-info {
-                font-size: 0.8em;
-                padding-bottom: 10px;
-                padding-top: 5px;
+            font-size: 0.8em;
+            padding-bottom: 10px;
+            padding-top: 5px;
+            display: inline-block;
             }
             .chklabel {
-                width: 50px;
-                font-weight: bold;
+            width: 50px;
+            font-weight: bold;
+            display: inline-block;
+            }
+            .chkvalue {
+            display: inline;
+            }
+            .chkfield {
+            padding-left: 4px;
+            }
+            details summary::-webkit-details-marker {
+                font-size:0;
+            }
+            details summary:after {
+                content: '\f078';
+                font-family: FontAwesome;
+                padding-left: 10px;
             }
         </style>
     </head>
@@ -91,15 +107,15 @@
                             {{end}}
                             {{end}}
                             <hr>
-                            {{ if .Body.Checks}}
+                            {{if .Body.Checks}}
                             <details>
-                                <summary style="padding-bottom: 10px;margin-left: -17px;font-weight: bold;">Checks</summary>
+                                <summary style="padding-bottom: 10px;font-weight: bold;">Checks</summary>
                                 {{range .Body.Checks}}
-                                <dt>{{.Name}}: <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
+                                <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
                                 <div class="check-info">
-                                    <div><span class="chklabel">Output: </span><span class="chkvalue">{{.Output}}</span></div>
-                                    <div><span class="chklabel">Action: </span><span class="chkvalue">{{.Action}}</span></div>
-                                    <div><span class="chklabel">Impact: </span><span class="chkvalue">{{.Impact}}</span></div>
+                                    {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
+                                    {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
+                                    {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
                                 </div>
                                 {{end}}
                             </details>
