@@ -12,21 +12,24 @@
         </script>
         <style>
             .check-info {
-            font-size: 0.8em;
-            padding-bottom: 10px;
-            padding-top: 5px;
-            display: inline-block;
+                font-size: 0.8em;
+                padding-bottom: 10px;
+                padding-top: 5px;
+                display: inline-block;
             }
             .chklabel {
-            width: 50px;
-            font-weight: bold;
-            display: inline-block;
+                width: 50px;
+                font-weight: bold;
+                display: inline-block;
             }
             .chkvalue {
-            display: inline;
+                display: inline;
             }
             .chkfield {
-            padding-left: 4px;
+                padding-left: 4px;
+            }
+            .chkcolumn {
+                min-width: 350px;
             }
             details summary::-webkit-details-marker {
                 font-size:0;
@@ -41,7 +44,7 @@
     <body>
         <div class="container-fluid d-flex flex-wrap">
             {{range .Checks}}
-            <div id="accordion-{{.Service.Name}}" class="w-25 m-0">
+            <div id="accordion-{{.Service.Name}}" class="chkcolumn w-25 m-0">
                 {{if eq .State "healthy"}}
                 <div class="card border-success m-1">
                 {{end}}
