@@ -34,7 +34,7 @@ type kubernetesClient interface {
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
 // not a kubeconfig file path is provided
 func NewKubeClient() *KubeClient {
-
+	log.Debug("creating kube client")
 	var config *rest.Config
 	var err error
 

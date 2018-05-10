@@ -42,16 +42,6 @@ Build, test and install:
 make all
 ```
 
-### Running out of cluster (locally)
-
-Set up the path to your local kubeconfig file (need cluster-wide read only permissions), e.g.:
-
-```sh
-export KUBECONFIG_FILEPATH=$HOME/.kube/config
-```
-
-Note that http calls to service health checks cannot be carried out when outside the cluster, so the responses are faked when the app detects that it is running out of cluster.
-
 ### Running in cluster
 
 ```sh
@@ -68,11 +58,13 @@ health-aggregator --help
 ```
       --port                       Port to listen on (env $PORT) (default "8080")
       --ops-port                   The HTTP ops port (env $OPS_PORT) (default 8081)
-      --kubeconfig                 (optional) absolute path to the kubeconfig file (env $KUBECONFIG_FILEPATH) (default "")
+      --write-timeout              The WriteTimeout for HTTP connections (env $HTTP_WRITE_TIMEOUT) (default 15)
+      --read-timeout               The ReadTimeout for HTTP connections (env $HTTP_READ_TIMEOUT) (default 15)
       --log-level                  Log level (e.g. INFO, DEBUG, WARN) (env $LOG_LEVEL) (default "INFO")
       --mongo-connection-string    Connection string to connect to mongo ex mongodb:27017/ (env $MONGO_CONNECTION_STRING) (default "127.0.0.1:27017/")
       --mongo-drop-db              Set to true in order to drop the DB on startup (env $MONGO_DROP_DB)
       --delete-checks-after-days   Age of check results in days after which they are deleted (env $DELETE_CHECKS_AFTER_DAYS) (default 7)
+      --restrict-namespace         Restrict checks to a single namespace (env $RESTRICT_NAMESPACE)
 ```
 
 ### Start MongoDB
@@ -195,6 +187,10 @@ Return a list of the last 50 checks for a service sort in time descending order.
 ### GET /namespaces/{namespace}/services/checks
 
 Returns a list of the most recent check responses for each of the services in the specified namespace.
+
+Default behaviour for this endpoint is to return an HTML formatted response. Use the following header for a json response:
+
+    Accept: application/json
 
 ```json
   [

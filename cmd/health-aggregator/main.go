@@ -92,16 +92,17 @@ func main() {
 	}
 
 	app.Action = func() {
-
+		log.Debug("dialling mongo")
 		mgoSess, err := mgo.Dial(*dbURL)
 		if err != nil {
 			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
 		}
-		mgoRepo := db.NewMongoRepository(mgoSess, constants.DBName)
 		defer mgoSess.Close()
+		mgoRepo := db.NewMongoRepository(mgoSess, constants.DBName)
 
 		// Drop the database if required
 		if *dropDB {
+			log.Info("dropping database")
 			dropErr := db.DropDB(mgoRepo)
 			if dropErr != nil {
 				log.WithError(err).Panic("failed to drop database")
@@ -194,6 +195,7 @@ func setLogger(logLevel *string) {
 }
 
 func createIndex(mgoRepo *db.MongoRepository) {
+	log.Debugf("creating mongodb index for collection %v", constants.HealthchecksCollection)
 	c := mgoRepo.Db().C(constants.HealthchecksCollection)
 
 	index := mgo.Index{
@@ -204,9 +206,11 @@ func createIndex(mgoRepo *db.MongoRepository) {
 	if err != nil {
 		panic(err)
 	}
+	log.Debug("index creation successful")
 }
 
 func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
+	log.Debug("starting ops server")
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", opsPort), op.NewHandler(op.
 		NewStatus(constants.AppName, constants.AppDesc).
 		AddOwner("labs", "#labs").
