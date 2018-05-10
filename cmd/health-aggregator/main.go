@@ -3,46 +3,27 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/gorilla/handlers"
+	h "github.com/gorilla/handlers"
 
 	"github.com/globalsign/mgo"
 	"github.com/jawher/mow.cli"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
 	"github.com/utilitywarehouse/go-operational/op"
+	"github.com/utilitywarehouse/health-aggregator/internal/checks"
+	"github.com/utilitywarehouse/health-aggregator/internal/constants"
+	"github.com/utilitywarehouse/health-aggregator/internal/db"
+	"github.com/utilitywarehouse/health-aggregator/internal/discovery"
+	"github.com/utilitywarehouse/health-aggregator/internal/handlers"
+	"github.com/utilitywarehouse/health-aggregator/internal/httpserver"
+	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
-)
-
-var (
-	client = &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 128,
-			Dial: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-		},
-	}
-	outOfCluster   bool
-	checkNamespace string
-)
-
-const (
-	appName                = "health-aggregator"
-	appDesc                = "This app aggregates the health of apps across k8s namespaces for a cluster."
-	defaultEnableScrape    = "true"
-	defaultPort            = "8081"
-	servicesCollection     = "services"
-	namespacesCollection   = "namespaces"
-	healthchecksCollection = "checks"
-	dbName                 = "healthaggregator"
 )
 
 var (
@@ -74,12 +55,6 @@ func main() {
 		Desc:   "The ReadTimeout for HTTP connections",
 		EnvVar: "HTTP_READ_TIMEOUT",
 		Value:  15,
-	})
-	kubeConfigPath := app.String(cli.StringOpt{
-		Name:   "kubeconfig",
-		Desc:   "(optional) absolute path to the kubeconfig file",
-		EnvVar: "KUBECONFIG_FILEPATH",
-		Value:  "",
 	})
 	logLevel := app.String(cli.StringOpt{
 		Name:   "log-level",
@@ -122,34 +97,43 @@ func main() {
 		if err != nil {
 			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
 		}
-		mgoRepo := NewMongoRepository(mgoSess, dbName)
+		mgoRepo := db.NewMongoRepository(mgoSess, constants.DBName)
 		defer mgoSess.Close()
 
-		dropDatabase(*dropDB, mgoRepo)
+		// Drop the database if required
+		if *dropDB {
+			dropErr := db.DropDB(mgoRepo)
+			if dropErr != nil {
+				log.WithError(err).Panic("failed to drop database")
+				return
+			}
+			log.Info("drop database successful")
+		}
+
 		createIndex(mgoRepo)
 
-		kubeClient := newKubeClient(*kubeConfigPath)
+		kubeClient := discovery.NewKubeClient()
 
 		errs := make(chan error, 10)
-		namespaces := make(chan namespace, 10)
-		services := make(chan service, 10)
-		healthchecks := make(chan service, 1000)
-		responses := make(chan healthcheckResp, 1000)
+		namespaces := make(chan model.Namespace, 10)
+		services := make(chan model.Service, 10)
+		healthchecks := make(chan model.Service, 1000)
+		responses := make(chan model.HealthcheckResp, 1000)
 
-		s := &serviceDiscovery{client: kubeClient.client, label: "app", namespaces: namespaces, services: services, errors: errs}
+		s := &discovery.ServiceDiscovery{Client: kubeClient.Client, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
 
 		go initHTTPServer(*opsPort, mgoSess)
-		go s.getClusterHealthcheckConfig()
-		go upsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
-		go upsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
+		go s.GetClusterHealthcheckConfig()
+		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
+		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
 
-		c := newHealthChecker()
+		c := checks.NewHealthChecker()
 
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
 				log.Printf("Scheduling healthchecks at %v", t)
-				getHealthchecks(*restrictToNamespace, mgoRepo, healthchecks, errs)
+				db.GetHealthchecks(*restrictToNamespace, mgoRepo, healthchecks, errs)
 			}
 		}()
 
@@ -157,12 +141,12 @@ func main() {
 		go func() {
 			for t := range tidyTicker.C {
 				log.Printf("Tidying old healthchecks %v", t)
-				removeHealthchecksOlderThan(*removeAfterDays, mgoRepo, errs)
+				db.RemoveOlderThan(*removeAfterDays, mgoRepo, errs)
 			}
 		}()
 
-		go c.doHealthchecks(healthchecks, responses, errs)
-		go insertHealthcheckResponses(mgoRepo, responses, errs)
+		go c.DoHealthchecks(healthchecks, responses, errs)
+		go db.InsertHealthcheckResponses(mgoRepo, responses, errs)
 
 		go func() {
 			for e := range errs {
@@ -170,11 +154,11 @@ func main() {
 			}
 		}()
 
-		router := newRouter(s, mgoRepo)
-		allowedCORSMethods := handlers.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
-		allowedCORSOrigins := handlers.AllowedOrigins([]string{"*"})
-		server := newHTTPServer(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
-		go startHTTPServer(server)
+		router := handlers.NewRouter(s, mgoRepo)
+		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
+		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
+		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
+		go httpserver.Start(server)
 
 		graceful(server, 10)
 	}
@@ -209,19 +193,8 @@ func setLogger(logLevel *string) {
 	log.SetLevel(lvl)
 }
 
-func dropDatabase(dropDB bool, mgoRepo *MongoRepository) {
-	if dropDB {
-		err := mgoRepo.session.DB(dbName).DropDatabase()
-		if err != nil {
-			log.WithError(err).Panic("failed to drop database")
-			return
-		}
-		log.Info("drop database successful")
-	}
-}
-
-func createIndex(mgoRepo *MongoRepository) {
-	c := mgoRepo.db().C(healthchecksCollection)
+func createIndex(mgoRepo *db.MongoRepository) {
+	c := mgoRepo.Db().C(constants.HealthchecksCollection)
 
 	index := mgo.Index{
 		Key: []string{"-checkTime"},
@@ -235,7 +208,7 @@ func createIndex(mgoRepo *MongoRepository) {
 
 func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", opsPort), op.NewHandler(op.
-		NewStatus(appName, appDesc).
+		NewStatus(constants.AppName, constants.AppDesc).
 		AddOwner("labs", "#labs").
 		AddLink("vcs", fmt.Sprintf("github.com/utilitywarehouse/health-aggegrator")).
 		SetRevision(gitHash).
