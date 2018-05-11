@@ -124,7 +124,13 @@ func main() {
 
 		s := &discovery.ServiceDiscovery{Client: kubeClient.Client, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
 
+		router := handlers.NewRouter(s, mgoRepo)
+		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
+		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
+		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
+		go httpserver.Start(server)
 		go initHTTPServer(*opsPort, mgoSess)
+
 		go s.GetClusterHealthcheckConfig()
 		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
 		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
@@ -134,7 +140,7 @@ func main() {
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
-				log.Printf("Scheduling healthchecks at %v", t)
+				log.Infof("Scheduling healthchecks at %v", t)
 				db.GetHealthchecks(mgoRepo, healthchecks, errs, *restrictToNamespaces...)
 			}
 		}()
@@ -142,7 +148,7 @@ func main() {
 		tidyTicker := time.NewTicker(60 * time.Minute)
 		go func() {
 			for t := range tidyTicker.C {
-				log.Printf("Tidying old healthchecks %v", t)
+				log.Infof("tidying old healthchecks %v", t)
 				db.RemoveOlderThan(*removeAfterDays, mgoRepo, errs)
 			}
 		}()
@@ -155,12 +161,6 @@ func main() {
 				log.Printf("ERROR: %v", e)
 			}
 		}()
-
-		router := handlers.NewRouter(s, mgoRepo)
-		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
-		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
-		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
-		go httpserver.Start(server)
 
 		graceful(server, 10)
 	}

@@ -23,8 +23,9 @@ func New(port int, router *mux.Router, writeTimeout int, readTimeout int, allowe
 
 // Start starts an http server
 func Start(server *http.Server) {
-	log.Info("healthchecks api started with address " + server.Addr)
+	log.Info("starting healthchecks api")
 	if err := server.ListenAndServe(); err != nil {
 		log.WithError(err).Fatal("Fatal error while running HTTP server")
 	}
+	log.Info("healthchecks api started with address " + server.Addr)
 }
