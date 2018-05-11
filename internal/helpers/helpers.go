@@ -138,18 +138,18 @@ func FindServiceByName(searchS model.Service, sList []model.Service) model.Servi
 }
 
 // TestSliceServicesEquality tests the equality of two provided slices of type Service
-func TestSliceServicesEquality(a, b []model.Service) bool {
+func TestSliceServicesEquality(a, b []model.Service) error {
 
 	if a == nil && b == nil {
-		return true
+		return nil
 	}
 
 	if a == nil || b == nil {
-		return false
+		return fmt.Errorf("failed check a == nil || b == nil, a==nil: %v, b==nil: %v", a == nil, b == nil)
 	}
 
 	if len(a) != len(b) {
-		return false
+		return fmt.Errorf("failed check len(a) != len(b) len(a): %v len(b): %v", len(a), len(b))
 	}
 
 	sort.Slice(a, func(i, j int) bool {
@@ -162,21 +162,21 @@ func TestSliceServicesEquality(a, b []model.Service) bool {
 
 	for i := range a {
 		if a[i].Name != b[i].Name {
-			return false
+			return fmt.Errorf("a[%v].Name != b[%v].Name, value a: %v value b: %v", i, i, a[i].Name, b[i].Name)
 		}
 		if a[i].Namespace != b[i].Namespace {
-			return false
+			return fmt.Errorf("a[%v].Namespace != b[%v].Namespace, value a: %v value b: %v", i, i, a[i].Namespace, b[i].Namespace)
 		}
 		if a[i].HealthcheckURL != b[i].HealthcheckURL {
-			return false
+			return fmt.Errorf("a[%v].HealthcheckURL != b[%v].HealthcheckURL, value a: %v value b: %v", i, i, a[i].HealthcheckURL, b[i].HealthcheckURL)
 		}
 		if a[i].HealthAnnotations.EnableScrape != b[i].HealthAnnotations.EnableScrape {
-			return false
+			return fmt.Errorf("a[%v].HealthAnnotations.EnableScrape != b[%v].HealthAnnotations.EnableScrape, value a: %v value b: %v", i, i, a[i].HealthAnnotations.EnableScrape, b[i].HealthAnnotations.EnableScrape)
 		}
 		if a[i].HealthAnnotations.Port != b[i].HealthAnnotations.Port {
-			return false
+			return fmt.Errorf("a[%v].HealthAnnotations.Port != b[%v].HealthAnnotations.Port, value a: %v value b: %v", i, i, a[i].HealthAnnotations.Port, b[i].HealthAnnotations.Port)
 		}
 	}
 
-	return true
+	return nil
 }

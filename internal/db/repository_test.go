@@ -1,10 +1,11 @@
 package db
 
 import (
+	"github.com/stretchr/testify/require"
 	//"io/ioutil"
 	"fmt"
 	//"net/http"
-	"os"
+
 	//"strings"
 	"testing"
 
@@ -28,31 +29,31 @@ const (
 )
 
 type TestSuite struct {
-	repo *MongoRepository
+	repo    *MongoRepository
+	session *mgo.Session
+	dbName  string
 }
 
 var s TestSuite
 
-func TestMain(m *testing.M) {
+func (s *TestSuite) SetUpTest() {
 	sess, err := mgo.Dial(dbURL)
 	if err != nil {
 		log.Fatalf("failed to create mongo session: %s", err.Error())
 	}
-	defer sess.Close()
+	s.session = sess
+	s.dbName = uuid.New()
+	s.repo = NewMongoRepository(s.session, s.dbName)
+}
 
-	s.repo = NewMongoRepository(sess, uuid.New())
-
-	code := m.Run()
-	dbErr := s.repo.Session.DB(s.repo.DBName).DropDatabase()
-	if dbErr != nil {
-		log.Printf("Failed to drop database %v", s.repo.DBName)
-	}
-	os.Exit(code)
+func (s *TestSuite) TearDownTest() {
+	s.session.DB(s.dbName).DropDatabase()
+	s.repo.Close()
 }
 
 func Test_GetHealthchecks(t *testing.T) {
-	repoCopy := s.repo.WithNewSession()
-	defer repoCopy.Close()
+	s.SetUpTest()
+	defer s.TearDownTest()
 
 	// Create Services with Health Annotations config
 	ns1Name := helpers.String(10)
@@ -73,7 +74,7 @@ func Test_GetHealthchecks(t *testing.T) {
 		HealthAnnotations: diffPortHealthAnnotations,
 	}
 
-	insertItems(repoCopy, s1, s2, s3)
+	insertItems(s.repo, s1, s2, s3)
 
 	errs := make(chan error, 10)
 	healthchecksNS1 := make(chan model.Service, 10)
@@ -90,11 +91,11 @@ func Test_GetHealthchecks(t *testing.T) {
 	expectedServicesAll := []model.Service{s1, s3}
 
 	go func() {
-		GetHealthchecks(ns1Name, s.repo, healthchecksNS1, errs)
+		GetHealthchecks(s.repo, healthchecksNS1, errs, ns1Name)
 		close(healthchecksNS1)
-		GetHealthchecks(ns2Name, s.repo, healthchecksNS2, errs)
+		GetHealthchecks(s.repo, healthchecksNS2, errs, ns2Name)
 		close(healthchecksNS2)
-		GetHealthchecks("", s.repo, healthchecksAll, errs)
+		GetHealthchecks(s.repo, healthchecksAll, errs)
 		close(healthchecksAll)
 		close(errs)
 	}()
@@ -110,20 +111,99 @@ func Test_GetHealthchecks(t *testing.T) {
 	for check := range healthchecksNS1 {
 		returnedServices = append(returnedServices, check)
 	}
-	assert.True(t, helpers.TestSliceServicesEquality(expectedServicesNS1, returnedServices))
+
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS1, returnedServices))
 	returnedServices = returnedServices[:0]
 
 	for check := range healthchecksNS2 {
 		returnedServices = append(returnedServices, check)
 	}
-	assert.True(t, helpers.TestSliceServicesEquality(expectedServicesNS2, returnedServices))
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS2, returnedServices))
 	returnedServices = returnedServices[:0]
 
 	for check := range healthchecksAll {
 		returnedServices = append(returnedServices, check)
 	}
-	assert.True(t, helpers.TestSliceServicesEquality(expectedServicesAll, returnedServices))
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesAll, returnedServices))
 
+}
+
+func Test_FindAllServicesWithHealthScrapeEnabled(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	// Create Services with Health Annotations config
+	ns1Name := helpers.String(10)
+	ns2Name := helpers.String(10)
+	ns3Name := helpers.String(10)
+	ns4Name := helpers.String(10)
+
+	s1 := model.Service{Name: helpers.String(10),
+		Namespace:         ns1Name,
+		HealthAnnotations: defaultHealthAnnotations,
+	}
+
+	s2 := model.Service{Name: helpers.String(10),
+		Namespace:         ns1Name,
+		HealthAnnotations: noScrapeHealthAnnotations,
+	}
+
+	s3 := model.Service{Name: helpers.String(10),
+		Namespace:         ns2Name,
+		HealthAnnotations: diffPortHealthAnnotations,
+	}
+
+	s4 := model.Service{Name: helpers.String(10),
+		Namespace:         ns3Name,
+		HealthAnnotations: defaultHealthAnnotations,
+	}
+
+	s5 := model.Service{Name: helpers.String(10),
+		Namespace:         ns4Name,
+		HealthAnnotations: noScrapeHealthAnnotations,
+	}
+
+	insertItems(s.repo, s1, s2, s3, s4, s5)
+
+	// Restricted to Namespace 1
+	expectedServicesNS1 := []model.Service{s1}
+
+	// Restricted to Namespace 2
+	expectedServicesNS2 := []model.Service{s3}
+
+	// Restricted to Namespace 1 and 3
+	expectedServicesNS1NS3 := []model.Service{s1, s4}
+
+	// Restricted to Namespace 4
+	expectedServicesNS4 := []model.Service{}
+
+	// Unrestricted
+	expectedServicesAll := []model.Service{s1, s3, s4}
+
+	returnedServices, err := FindAllServicesWithHealthScrapeEnabled(s.repo, ns1Name)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS1, returnedServices))
+
+	returnedServices, err = FindAllServicesWithHealthScrapeEnabled(s.repo, ns2Name)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS2, returnedServices))
+
+	returnedServices, err = FindAllServicesWithHealthScrapeEnabled(s.repo, ns1Name, ns3Name)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS1NS3, returnedServices))
+
+	returnedServices, err = FindAllServicesWithHealthScrapeEnabled(s.repo, ns4Name)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesNS4, returnedServices))
+
+	returnedServices, err = FindAllServicesWithHealthScrapeEnabled(s.repo)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesAll, returnedServices))
+
+	allNamespaces := []string{}
+	returnedServices, err = FindAllServicesWithHealthScrapeEnabled(s.repo, allNamespaces...)
+	require.NoError(t, err)
+	assert.NoError(t, helpers.TestSliceServicesEquality(expectedServicesAll, returnedServices))
 }
 
 func insertItems(mgoRepo *MongoRepository, objs ...interface{}) {

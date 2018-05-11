@@ -80,11 +80,11 @@ func main() {
 		EnvVar: "DELETE_CHECKS_AFTER_DAYS",
 		Value:  1,
 	})
-	restrictToNamespace := app.String(cli.StringOpt{
+	restrictToNamespaces := app.Strings(cli.StringsOpt{
 		Name:   "restrict-namespace",
-		Desc:   "Restrict checks to a single namespace",
+		Desc:   "Restrict checks to one or more namespaces - e.g. export RESTRICT_NAMESPACE=\"auth\",\"redis\"",
 		EnvVar: "RESTRICT_NAMESPACE",
-		Value:  "",
+		Value:  []string{},
 	})
 
 	app.Before = func() {
@@ -92,6 +92,7 @@ func main() {
 	}
 
 	app.Action = func() {
+		fmt.Println(*restrictToNamespaces)
 		log.Debug("dialling mongo")
 		mgoSess, err := mgo.Dial(*dbURL)
 		if err != nil {
@@ -134,7 +135,7 @@ func main() {
 		go func() {
 			for t := range ticker.C {
 				log.Printf("Scheduling healthchecks at %v", t)
-				db.GetHealthchecks(*restrictToNamespace, mgoRepo, healthchecks, errs)
+				db.GetHealthchecks(mgoRepo, healthchecks, errs, *restrictToNamespaces...)
 			}
 		}()
 

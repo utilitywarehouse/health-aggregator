@@ -63,8 +63,8 @@ health-aggregator --help
       --log-level                  Log level (e.g. INFO, DEBUG, WARN) (env $LOG_LEVEL) (default "INFO")
       --mongo-connection-string    Connection string to connect to mongo ex mongodb:27017/ (env $MONGO_CONNECTION_STRING) (default "127.0.0.1:27017/")
       --mongo-drop-db              Set to true in order to drop the DB on startup (env $MONGO_DROP_DB)
-      --delete-checks-after-days   Age of check results in days after which they are deleted (env $DELETE_CHECKS_AFTER_DAYS) (default 7)
-      --restrict-namespace         Restrict checks to a single namespace (env $RESTRICT_NAMESPACE)
+      --delete-checks-after-days   Age of check results in days after which they are deleted (env $DELETE_CHECKS_AFTER_DAYS) (default 1)
+      --restrict-namespace         Restrict checks to one or more namespaces - e.g. export RESTRICT_NAMESPACE="labs","energy"
 ```
 
 ### Start MongoDB

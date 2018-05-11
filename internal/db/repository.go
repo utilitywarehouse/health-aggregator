@@ -132,19 +132,18 @@ func FindAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]model.S
 }
 
 // FindAllServicesWithHealthScrapeEnabled finds all Services where the EnableScrape from HealthAnnotations is true
-func FindAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository, restrictToNamespace string) ([]model.Service, error) {
+func FindAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository, restrictToNamespace ...string) ([]model.Service, error) {
 
 	collection := mgoRepo.Db().C(constants.ServicesCollection)
-
-	var svcs []model.Service
-	if restrictToNamespace != "" {
-		if err := collection.Find(bson.M{"namespace": restrictToNamespace, "healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
-			return nil, fmt.Errorf("failed to get all service healthcheck endpoints with scrape enabled")
+	svcs := []model.Service{}
+	if len(restrictToNamespace) > 0 {
+		if err := collection.Find(bson.M{"namespace": bson.M{"$in": restrictToNamespace}, "healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
+			return nil, errors.Wrap(err, "failed to get all service healthcheck endpoints with scrape enabled")
 		}
 		return svcs, nil
 	}
 	if err := collection.Find(bson.M{"healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
-		return nil, fmt.Errorf("failed to get all service healthcheck endpoints with scrape enabled")
+		return nil, errors.Wrap(err, "failed to get all service healthcheck endpoints with scrape enabled")
 	}
 
 	return svcs, nil
@@ -213,8 +212,8 @@ func DropDB(mgoRepo *MongoRepository) error {
 
 // GetHealthchecks retrieves the list of Services (and their health annotations) from the DB and places them on a channel
 // of type Service
-func GetHealthchecks(restrictToNamespace string, mgoRepo *MongoRepository, healthchecks chan model.Service, errs chan error) {
-	services, err := FindAllServicesWithHealthScrapeEnabled(mgoRepo, restrictToNamespace)
+func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, errs chan error, restrictToNamespace ...string) {
+	services, err := FindAllServicesWithHealthScrapeEnabled(mgoRepo, restrictToNamespace...)
 	if err != nil {
 		select {
 		case errs <- fmt.Errorf("Could not get services (%v)", err):
