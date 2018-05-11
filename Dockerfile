@@ -15,6 +15,6 @@ RUN apk update \
   && mv ${SERVICE} /${SERVICE} \
   && mkdir /templates
 
-COPY ./cmd/${SERVICE}/templates/* /templates/
+COPY ./internal/templates/* /templates/
 
 CMD ["/health-aggregator"]

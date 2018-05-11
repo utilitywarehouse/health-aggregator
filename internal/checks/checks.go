@@ -23,7 +23,6 @@ var (
 			}).Dial,
 		},
 	}
-	checkNamespace string
 )
 
 type httpClient interface {

@@ -18,8 +18,8 @@ type Namespace struct {
 
 // HealthAnnotations matching the associated annotations against the resource in k8s
 type HealthAnnotations struct {
-	EnableScrape string `json:"enableScrape" bson:"enableScrape"` // uw.health.aggregator.enable
-	Port         string `json:"port" bson:"port"`                 // uw.health.aggregator.port
+	EnableScrape string `json:"enableScrape" bson:"enableScrape"` // k8s annotation: uw.health.aggregator.enable
+	Port         string `json:"port" bson:"port"`                 // k8s annotation: uw.health.aggregator.port
 }
 
 // HealthcheckResp describes the performed health check against a Service
