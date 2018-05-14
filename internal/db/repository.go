@@ -71,6 +71,7 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, responses chan model.H
 
 			if prevCheckResponse.State != r.State {
 				r.StateSince = r.CheckTime
+				r.PreviousState = prevCheckResponse.State
 			} else {
 				r.StateSince = prevCheckResponse.StateSince
 			}

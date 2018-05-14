@@ -125,8 +125,16 @@
                             {{end}}
                             <dt>Last Checked</dt>
                             <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></dd>
-                            <dt>Entered This State</dt>
-                            <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.StateSince}}">{{.HumanisedStateSince}}</a></dd>
+                            <div style="display:flex;">
+                                    <div style="width:50%;">
+                                    <dt>Entered State</dt>
+                                    <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.StateSince}}">{{.HumanisedStateSince}}</a></dd>
+                                </div>
+                                <div style="width:50%;color:gray;">
+                                    <dt>Previous State</dt>
+                                    <dd>{{.PreviousState}}</dd>
+                                </div>
+                            </div>
                             <a href="/namespaces/{{$.Namespace}}/services/{{.Service.Name}}/checks"class="btn btn-primary">History</a>
                         </div>
                     </div> <!-- end of collapse-{{.Service.Name}} -->

@@ -30,6 +30,7 @@ type HealthcheckResp struct {
 	State               string          `json:"state" bson:"state"`
 	StatePriority       int             `json:"-"`
 	StateSince          time.Time       `json:"stateSince" bson:"stateSince"`
+	PreviousState       string          `json:"previousState" bson:"previousState"`
 	HumanisedStateSince string          `json:"-"`
 	StatusCode          int             `json:"statusCode" bson:"statusCode"`
 	Error               string          `json:"error" bson:"error"`
