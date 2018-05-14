@@ -211,7 +211,7 @@ func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
 		AddLink("vcs", fmt.Sprintf("github.com/utilitywarehouse/health-aggegrator")).
 		SetRevision(gitHash).
 		AddChecker("mongo", healthcheck.NewMongoHealthCheck(mgoSess, "Unable to access mongo db")).
-		ReadyAlways().
+		ReadyUseHealthCheck().
 		WithInstrumentedChecks(),
 	)); err != nil {
 		log.WithError(err).Fatal("ops server has shut down")
