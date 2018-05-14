@@ -64,7 +64,7 @@ func withRepoCopy(mgoRepo *db.MongoRepository, next func(mgoRepo *db.MongoReposi
 func (h reloadHandler) reload(mgoRepo *db.MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, sChanOpen := (<-h.discovery.Services)
-		_, nChanOpen := (<-h.discovery.Services)
+		_, nChanOpen := (<-h.discovery.Namespaces)
 		if sChanOpen || nChanOpen {
 			errorWithJSON(w, "reload in progress - try again later", http.StatusServiceUnavailable)
 			return

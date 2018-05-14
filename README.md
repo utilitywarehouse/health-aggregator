@@ -18,6 +18,7 @@ Table of Contents
   * [GET /namespaces/{namespace}/services/{service}/checks](#get-namespacesnamespaceservicesservicechecks)
   * [GET /namespaces/{namespace}/services/checks](#get-namespacesnamespaceserviceschecks)
   * [POST /reload](#post-reload)
+  * [GET /kube-ops/ready](#get-kube-opsready)
 * [License](#license)
 
 Requirements
@@ -241,6 +242,10 @@ Default behaviour for this endpoint is to return an HTML formatted response. Use
 ### POST /reload
 
 This POST with empty body carries out the discovery process for all health endpoints once more, allowing any annotation changes or new services and namespaces to be picked up.
+
+### GET /kube-ops/ready
+
+This endpoint is used for the kubernetes readiness check and returns a simply 200 response code once the main http server is running.
 
 License
 -------

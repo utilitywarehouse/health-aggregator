@@ -114,15 +114,12 @@ func main() {
 
 		createIndex(mgoRepo)
 
-		kubeClient := discovery.NewKubeClient()
-
 		errs := make(chan error, 10)
-		namespaces := make(chan model.Namespace, 10)
-		services := make(chan model.Service, 10)
 		healthchecks := make(chan model.Service, 1000)
 		responses := make(chan model.HealthcheckResp, 1000)
 
-		s := &discovery.ServiceDiscovery{Client: kubeClient.Client, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
+		kubeClient := discovery.NewKubeClient().Client
+		s := &discovery.ServiceDiscovery{Client: kubeClient, Label: "app", Errors: errs}
 
 		router := handlers.NewRouter(s, mgoRepo)
 		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
@@ -130,10 +127,6 @@ func main() {
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
 		go httpserver.Start(server)
 		go initHTTPServer(*opsPort, mgoSess)
-
-		go s.GetClusterHealthcheckConfig()
-		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
-		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
 
 		c := checks.NewHealthChecker()
 
