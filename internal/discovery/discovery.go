@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // ServiceDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
@@ -33,12 +34,15 @@ type kubernetesClient interface {
 
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
 // not a kubeconfig file path is provided
-func NewKubeClient() *KubeClient {
-	log.Debug("creating kube client")
+func NewKubeClient(kubeConfigPath string) *KubeClient {
+
 	var config *rest.Config
 	var err error
-
-	config, err = rest.InClusterConfig()
+	if kubeConfigPath != "" {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+	} else {
+		config, err = rest.InClusterConfig()
+	}
 	if err != nil {
 		log.Fatalf("Failed to create kubernetes client: %v", err)
 	}
@@ -114,8 +118,6 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 			log.Debugf("Added service %v to channel\n", svc.Name)
 		}
 	}
-	close(s.Services)
-	close(s.Namespaces)
 }
 
 func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error) {

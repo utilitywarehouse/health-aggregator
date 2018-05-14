@@ -63,22 +63,9 @@ func withRepoCopy(mgoRepo *db.MongoRepository, next func(mgoRepo *db.MongoReposi
 
 func (h reloadHandler) reload(mgoRepo *db.MongoRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, sChanOpen := (<-h.discovery.Services)
-		_, nChanOpen := (<-h.discovery.Namespaces)
-		if sChanOpen || nChanOpen {
-			errorWithJSON(w, "reload in progress - try again later", http.StatusServiceUnavailable)
-			return
-		}
-		// Open new channels
-		namespaces := make(chan model.Namespace, 10)
-		services := make(chan model.Service, 10)
 
-		// Assign new channels to
-		h.discovery.Services = services
-		h.discovery.Namespaces = namespaces
 		go h.discovery.GetClusterHealthcheckConfig()
-		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, h.discovery.Errors)
-		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, h.discovery.Errors)
+
 		responseWithJSON(w, http.StatusOK, map[string]string{"message": "ok"})
 	}
 }

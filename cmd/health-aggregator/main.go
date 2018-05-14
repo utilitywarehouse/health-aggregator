@@ -86,13 +86,18 @@ func main() {
 		EnvVar: "RESTRICT_NAMESPACE",
 		Value:  []string{},
 	})
+	kubeConfigPath := app.String(cli.StringOpt{
+		Name:   "kubeconfig",
+		Desc:   "(optional) absolute path to the kubeconfig file",
+		EnvVar: "KUBECONFIG_FILEPATH",
+		Value:  "",
+	})
 
 	app.Before = func() {
 		setLogger(logLevel)
 	}
 
 	app.Action = func() {
-		fmt.Println(*restrictToNamespaces)
 		log.Debug("dialling mongo")
 		mgoSess, err := mgo.Dial(*dbURL)
 		if err != nil {
@@ -117,9 +122,14 @@ func main() {
 		errs := make(chan error, 10)
 		healthchecks := make(chan model.Service, 1000)
 		responses := make(chan model.HealthcheckResp, 1000)
+		namespaces := make(chan model.Namespace, 10)
+		services := make(chan model.Service, 10)
 
-		kubeClient := discovery.NewKubeClient().Client
-		s := &discovery.ServiceDiscovery{Client: kubeClient, Label: "app", Errors: errs}
+		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
+		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
+
+		kubeClient := discovery.NewKubeClient(*kubeConfigPath).Client
+		s := &discovery.ServiceDiscovery{Client: kubeClient, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
 
 		router := handlers.NewRouter(s, mgoRepo)
 		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
