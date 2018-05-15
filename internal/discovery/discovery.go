@@ -22,6 +22,10 @@ type ServiceDiscovery struct {
 	Errors     chan error
 }
 
+type deployment struct {
+	desiredReplicas int32
+}
+
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
 // not a kubeconfig file path is provided
 func NewKubeClient(kubeConfigPath string) *kubernetes.Clientset {
@@ -88,9 +92,18 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 			return
 		}
 
+		// exclude those services where no pods are intended to run
+		deployments, depErr := s.getDeployments(n.Name)
+		if depErr != nil {
+			log.Errorf("Failed getting deployments, err: %v", depErr)
+		}
+
 		for _, svc := range services.Items {
 
-			//deployment := s.K8sClient.Core().PodTemplates().Get()(metav1.ListOptions{})
+			if deployments[svc.Name].desiredReplicas < 1 {
+				log.Debugf("Not adding service %v namespace %v as desired replicas set to %v", svc.Name, n.Name, deployments[svc.Name].desiredReplicas)
+				continue
+			}
 
 			serviceAnnotations, err := getHealthAnnotations(svc)
 			if err != nil {
@@ -112,20 +125,20 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 	}
 }
 
-// func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]deployment, error) {
-// 	deploymentList, err := s.Client.Core()  hs.k8sClient.ExtensionsV1beta1().Deployments().List(v1.ListOptions{})
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
-// 	}
+func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]deployment, error) {
+	deploymentList, err := s.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
+	}
 
-// 	deployments := make(map[string]deployment)
-// 	for _, d := range deploymentList.Items {
-// 		deployments[d.Name] = deployment{
-// 			desiredReplicas: *d.Spec.Replicas,
-// 		}
-// 	}
-// 	return deployments, nil
-// }
+	deployments := make(map[string]deployment)
+	for _, d := range deploymentList.Items {
+		deployments[d.Name] = deployment{
+			desiredReplicas: *d.Spec.Replicas,
+		}
+	}
+	return deployments, nil
+}
 
 func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error) {
 
