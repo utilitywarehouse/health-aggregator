@@ -9,32 +9,22 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 // ServiceDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
 type ServiceDiscovery struct {
-	Client     kubernetesClient
+	K8sClient  kubernetes.Interface
 	Label      string
 	Namespaces chan model.Namespace
 	Services   chan model.Service
 	Errors     chan error
 }
 
-// KubeClient - the k8s client
-type KubeClient struct {
-	Client kubernetesClient
-}
-
-type kubernetesClient interface {
-	Core() v1core.CoreV1Interface
-}
-
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
 // not a kubeconfig file path is provided
-func NewKubeClient(kubeConfigPath string) *KubeClient {
+func NewKubeClient(kubeConfigPath string) *kubernetes.Clientset {
 
 	var config *rest.Config
 	var err error
@@ -52,7 +42,7 @@ func NewKubeClient(kubeConfigPath string) *KubeClient {
 		log.Panic(err)
 	}
 
-	return &KubeClient{Client: kubeClientSet}
+	return kubeClientSet
 }
 
 // GetClusterHealthcheckConfig method retrieves Namespace and Service annotations specific to health aggregator
@@ -61,7 +51,7 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 	log.Info("loading namespace and service annotations")
 	defaultAnnotations := model.HealthAnnotations{EnableScrape: constants.DefaultEnableScrape, Port: constants.DefaultPort}
 
-	namespaces, err := s.Client.Core().Namespaces().List(metav1.ListOptions{})
+	namespaces, err := s.K8sClient.Core().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		select {
 		case s.Errors <- fmt.Errorf("Could not get namespaces via kubernetes api 1: (%v)", err):
@@ -89,7 +79,7 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 
 		log.Debugf("Added namespace %v to channel\n", n.Name)
 
-		services, err := s.Client.Core().Services(n.Name).List(metav1.ListOptions{LabelSelector: s.Label})
+		services, err := s.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{LabelSelector: s.Label})
 		if err != nil {
 			select {
 			case s.Errors <- fmt.Errorf("Could not get services via kubernetes api: (%v)", err):
@@ -99,6 +89,8 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 		}
 
 		for _, svc := range services.Items {
+
+			//deployment := s.K8sClient.Core().PodTemplates().Get()(metav1.ListOptions{})
 
 			serviceAnnotations, err := getHealthAnnotations(svc)
 			if err != nil {
@@ -119,6 +111,21 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 		}
 	}
 }
+
+// func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]deployment, error) {
+// 	deploymentList, err := s.Client.Core()  hs.k8sClient.ExtensionsV1beta1().Deployments().List(v1.ListOptions{})
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
+// 	}
+
+// 	deployments := make(map[string]deployment)
+// 	for _, d := range deploymentList.Items {
+// 		deployments[d.Name] = deployment{
+// 			desiredReplicas: *d.Spec.Replicas,
+// 		}
+// 	}
+// 	return deployments, nil
+// }
 
 func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error) {
 

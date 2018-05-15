@@ -128,8 +128,8 @@ func main() {
 		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
 		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
 
-		kubeClient := discovery.NewKubeClient(*kubeConfigPath).Client
-		s := &discovery.ServiceDiscovery{Client: kubeClient, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
+		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
+		s := &discovery.ServiceDiscovery{K8sClient: kubeClient, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
 
 		router := handlers.NewRouter(s, mgoRepo)
 		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
