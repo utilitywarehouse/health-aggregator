@@ -38,6 +38,10 @@
                 content: '\f078';
                 font-family: FontAwesome;
                 padding-left: 10px;
+                color: black;
+            }
+            .podsummary {
+                display: inline-flex;
             }
         </style>
     </head>
@@ -45,51 +49,44 @@
         <div class="container-fluid d-flex flex-wrap">
             {{range .Checks}}
             <div id="accordion-{{.Service.Name}}" class="chkcolumn w-25 m-0">
-                {{if eq .State "healthy"}}
+                {{if eq .AggregatedState "healthy"}}
                 <div class="card border-success m-1">
+                <!-- if eq .AggregatedState "healthy" -->
                 {{end}}
-                {{if eq .State "unhealthy"}}
-                {{if ne .StatusCode 0}}
+                {{if eq .AggregatedState "unhealthy"}}
                 <div class="card border-danger m-1">
-                {{else}}
-                <div class="card border-light m-1">
+                <!-- if eq .AggregatedState "unhealthy" -->
                 {{end}}
-                {{end}}
-                {{if eq .State "degraded"}}
+                {{if eq .AggregatedState "degraded"}}
                 <div class="card border-warning m-1">
+                <!-- if eq .AggregatedState "degraded" -->
                 {{end}}
-                    {{if eq .State "healthy"}}
+                    {{if eq .AggregatedState "healthy"}}
                     <div class="card-header bg-success border-success" id="heading-{{.Service.Name}}">
                         <h5 class="m-0">
                             <button class="btn btn-link text-white font-weight-bold pl-0 pr-0" style="overflow: hidden;text-overflow: ellipsis;max-width: 93%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
                                 {{.Service.Name}}
                             </button>
                             <i class="fa fa-check text-white" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "healthy" -->
                     {{end}}
-                    {{if eq .State "unhealthy"}}
-                    {{if ne .StatusCode 0}}
+                    {{if eq .AggregatedState "unhealthy"}}
                     <div class="card-header bg-danger border-danger" id="heading-{{.Service.Name}}">
                         <h5 class="m-0">
                             <button class="btn btn-link text-white font-weight-bold pl-0 pr-0" style="overflow: hidden;text-overflow: ellipsis;max-width: 93%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
                                 {{.Service.Name}}
                             </button>
                             <i class="fa fa-times text-white" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
-                    {{else}}
-                    <div class="card-header bg-danger border-danger" id="heading-{{.Service.Name}}">
-                        <h5 class="m-0">
-                            <button class="btn btn-link text-white font-weight-bold pl-0 pr-0" style="overflow: hidden;text-overflow: ellipsis;max-width: 93%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
-                                {{.Service.Name}} 
-                            </button>
-                            <i class="fa fa-clock-o text-white" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "unhealthy" -->
                     {{end}}
-                    {{end}}
-                    {{if eq .State "degraded"}}
+                    {{if eq .AggregatedState "degraded"}}
                     <div class="card-header bg-warning border-warning" id="heading-{{.Service.Name}}">
                         <h5 class="m-0">
                                 <button class="btn btn-link text-white font-weight-bold pl-0 pr-0" style="overflow: hidden;text-overflow: ellipsis;max-width: 93%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
                                     {{.Service.Name}} <i class="fa fa-times" aria-hidden="true"></i>
                                 </button>
                                 <i class="fa fa-exclamation-triangle text-white" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "degraded" -->
                     {{end}}
                         </h5>
                     </div>
@@ -97,31 +94,58 @@
                     <div id="collapse-{{.Service.Name}}" class="collapse" aria-labelledby="heading-{{.Service.Name}}" data-parent="#accordion-{{.Service.Name}}">
                         <div class="card-body">
                             <dt>State</dt>
-                            <dd>{{.State}}</dd>
-                            {{if ne .State "healthy"}}
-                            {{if ne .StatusCode 0}}
-                            <dt>Status Code</dt>
-                            <dd>{{.StatusCode}}</dd>
-                            <dt>Error</dt>
-                            <dd>{{.Error}}</dd>
-                            {{else}}
+                            <dd>{{.AggregatedState}}</dd>
+                            {{if ne .AggregatedState "healthy"}}
                             <dt>Error</dt>
                             <samp style="font-size:0.8em">{{.Error}}</samp>
-                            {{end}}
+                            <!-- if ne .AggregatedState "healthy" -->
                             {{end}}
                             <hr>
-                            {{if .Body.Checks}}
+                            {{if .PodChecks}}
                             <details>
                                 <summary style="padding-bottom: 10px;font-weight: bold;">Checks</summary>
-                                {{range .Body.Checks}}
-                                <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
-                                <div class="check-info">
-                                    {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
-                                    {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
-                                    {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
-                                </div>
+                                    {{range .PodChecks}}
+                                    <details>
+                                        {{if eq .State "healthy"}}
+                                        <summary class="text-success podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                        {{end}}
+                                        {{if eq .State "unhealthy"}}
+                                        <summary class="text-danger podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                        {{end}}
+                                        {{if eq .State "degraded"}}
+                                        <summary class="text-warning podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                        {{end}}
+                                        <p><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></p>
+                                        <dt>State</dt>
+                                        <dd>State: {{.State}}</dd>
+                                        <dt>Status Code</dt>
+                                        <dd>{{.StatusCode}}</dd>
+                                        <dt>Error</dt>
+                                        <samp style="font-size:0.8em">{{.Error}}</samp>
+                                        <hr>
+                                        {{if .Body}}
+                                        {{if .Body.Checks}}
+                                        {{range .Body.Checks}}
+                                        <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
+                                        <div class="check-info">
+                                            {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
+                                            {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
+                                            {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
+                                        </div>
+                                        <!-- range .Body.Checks -->
+                                        {{end}}
+                                        <!-- if .Body.Checks -->
+                                        {{end}}
+                                        <!-- if .Body -->
+                                        {{end}}
+                                    </details>
+                                
+                                
+                                <!-- range .PodChecks -->
                                 {{end}}
+                                <hr>
                             </details>
+                            <!-- if .PodChecks -->
                             {{end}}
                             <dt>Last Checked</dt>
                             <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></dd>
@@ -140,6 +164,7 @@
                     </div> <!-- end of collapse-{{.Service.Name}} -->
                 </div> <!-- end of card {{.Service.Name}} -->
             </div> <!-- end of accordian {{.Service.Name}} -->
+            <!-- range .Checks -->
             {{end}}
         </div> <!-- end of container -->
     </body>

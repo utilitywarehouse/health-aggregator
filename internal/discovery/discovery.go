@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"fmt"
+	"strconv"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
@@ -20,10 +21,6 @@ type ServiceDiscovery struct {
 	Namespaces chan model.Namespace
 	Services   chan model.Service
 	Errors     chan error
-}
-
-type deployment struct {
-	desiredReplicas int32
 }
 
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
@@ -100,9 +97,14 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 
 		for _, svc := range services.Items {
 
-			if deployments[svc.Name].desiredReplicas < 1 {
-				log.Debugf("Not adding service %v namespace %v as desired replicas set to %v", svc.Name, n.Name, deployments[svc.Name].desiredReplicas)
+			if _, exists := deployments[svc.Name]; !exists {
+				log.Errorf("cannot find deployment for service with name %s", svc.Name)
 				continue
+			} else {
+				if deployments[svc.Name].DesiredReplicas < 1 {
+					log.Debugf("Not adding service %v namespace %v as desired replicas set to %v", svc.Name, n.Name, deployments[svc.Name].DesiredReplicas)
+					continue
+				}
 			}
 
 			serviceAnnotations, err := getHealthAnnotations(svc)
@@ -114,27 +116,31 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 				continue
 			}
 			serviceAnnotations = overrideParentAnnotations(serviceAnnotations, namespaceAnnotations)
+			appPort := getAppPortForService(&svc, serviceAnnotations.Port)
+
 			s.Services <- model.Service{
 				Name:              svc.Name,
 				Namespace:         n.Name,
 				HealthcheckURL:    fmt.Sprintf("http://%s.%s:%s/__/health", svc.Name, n.Name, serviceAnnotations.Port),
 				HealthAnnotations: serviceAnnotations,
+				AppPort:           appPort,
+				Deployment:        deployments[svc.Name],
 			}
 			log.Debugf("Added service %v to channel\n", svc.Name)
 		}
 	}
 }
 
-func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]deployment, error) {
+func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]model.DeployInfo, error) {
 	deploymentList, err := s.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
 	}
 
-	deployments := make(map[string]deployment)
+	deployments := make(map[string]model.DeployInfo)
 	for _, d := range deploymentList.Items {
-		deployments[d.Name] = deployment{
-			desiredReplicas: *d.Spec.Replicas,
+		deployments[d.Name] = model.DeployInfo{
+			DesiredReplicas: *d.Spec.Replicas,
 		}
 	}
 	return deployments, nil
@@ -187,4 +193,18 @@ func overrideParentAnnotations(h model.HealthAnnotations, overrides model.Health
 		h.EnableScrape = overrides.EnableScrape
 	}
 	return h
+}
+
+// TODO: look to remove this usage
+func getAppPortForService(k8sService *v1.Service, serviceScrapePort string) string {
+	servicePorts := k8sService.Spec.Ports
+	for _, port := range servicePorts {
+		scrapePort, _ := strconv.Atoi(serviceScrapePort)
+		if port.Port == int32(scrapePort) {
+			if port.TargetPort.StrVal != "" {
+				return port.TargetPort.StrVal
+			}
+		}
+	}
+	return serviceScrapePort
 }

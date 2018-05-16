@@ -51,27 +51,27 @@ func UpsertNamespaceConfigs(mgoRepo *MongoRepository, namespaces chan model.Name
 	}(namespaces)
 }
 
-// InsertHealthcheckResponses inserts health check responses picked from a channel of type HealthcheckResp, sending any
+// InsertHealthcheckResponses inserts health check responses picked from a channel of type ServiceStatus, sending any
 // errors to a channel of type error
-func InsertHealthcheckResponses(mgoRepo *MongoRepository, responses chan model.HealthcheckResp, errs chan error) {
+func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error) {
 
-	go func(responses chan model.HealthcheckResp) {
+	go func(statusResponses chan model.ServiceStatus) {
 		repoCopy := mgoRepo.WithNewSession()
 		defer repoCopy.Close()
-		for r := range responses {
+		for r := range statusResponses {
 
 			collection := repoCopy.Db().C(constants.HealthchecksCollection)
 
-			var prevCheckResponse model.HealthcheckResp
+			var prevCheckResponse model.ServiceStatus
 			if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
 				if err != mgo.ErrNotFound {
 					log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
 				}
 			}
 
-			if prevCheckResponse.State != r.State {
+			if prevCheckResponse.AggregatedState != r.AggregatedState {
 				r.StateSince = r.CheckTime
-				r.PreviousState = prevCheckResponse.State
+				r.PreviousState = prevCheckResponse.AggregatedState
 			} else {
 				r.StateSince = prevCheckResponse.StateSince
 			}
@@ -82,7 +82,7 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, responses chan model.H
 				return
 			}
 		}
-	}(responses)
+	}(statusResponses)
 }
 
 // FindAllServices finds all Services regardless of Namespace
@@ -150,26 +150,26 @@ func FindAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository, restrictTo
 	return svcs, nil
 }
 
-// FindAllChecksForService returns the last 50 HealthcheckResp for a given Service and Namespace string in CheckTime
+// FindAllChecksForService returns the last 50 ServiceStatus for a given Service and Namespace string in CheckTime
 // descending order
-func FindAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]model.HealthcheckResp, error) {
+func FindAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]model.ServiceStatus, error) {
 
 	collection := mgoRepo.Db().C(constants.HealthchecksCollection)
 
-	var checks []model.HealthcheckResp
+	var checks []model.ServiceStatus
 	if err := collection.Find(bson.M{"service.namespace": n, "service.name": s}).Limit(50).Sort("-checkTime").All(&checks); err != nil {
 		return nil, fmt.Errorf("failed to get all healthcheck responses for service %v in namespace %v", s, n)
 	}
 
 	if checks == nil {
-		checks = []model.HealthcheckResp{}
+		checks = []model.ServiceStatus{}
 	}
 
 	return checks, nil
 }
 
-// FindLatestChecksForNamespace returns the latest HealthcheckResp for all services in a given Namespace Name
-func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.HealthcheckResp, error) {
+// FindLatestChecksForNamespace returns the latest ServiceStatus for all services in a given Namespace Name
+func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.ServiceStatus, error) {
 
 	collection := mgoRepo.Db().C(constants.HealthchecksCollection)
 
@@ -181,14 +181,14 @@ func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.H
 
 	pipe := collection.Pipe(pipeline).AllowDiskUse()
 
-	var checks []model.HealthcheckResp
+	var checks []model.ServiceStatus
 	err := pipe.All(&checks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all healthcheck responses for service within namespace %v err: %v", n, err)
 	}
 
 	if checks == nil {
-		checks = []model.HealthcheckResp{}
+		checks = []model.ServiceStatus{}
 	}
 
 	return checks, nil

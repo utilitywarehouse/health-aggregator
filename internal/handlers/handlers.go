@@ -22,7 +22,7 @@ type reloadHandler struct {
 	discovery *discovery.ServiceDiscovery
 }
 
-type byStateThenByName []model.HealthcheckResp
+type byStateThenByName []model.ServiceStatus
 
 func (a byStateThenByName) Len() int      { return len(a) }
 func (a byStateThenByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -187,20 +187,20 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 	}
 }
 
-func sortByState(checks []model.HealthcheckResp) {
+func sortByState(checks []model.ServiceStatus) {
 	sort.Sort(byStateThenByName(checks))
 }
 
-func enrichChecksData(checks []model.HealthcheckResp) {
+func enrichChecksData(checks []model.ServiceStatus) {
 
 	for idx, check := range checks {
 		checks[idx].HumanisedCheckTime = humanize.Time(check.CheckTime)
 		checks[idx].HumanisedStateSince = humanize.Time(check.StateSince)
 
 		// Be lenient on those services which do not match the /health endpoint specification
-		checks[idx].State = strings.ToLower(check.State)
+		checks[idx].AggregatedState = strings.ToLower(check.AggregatedState)
 
-		switch strings.ToLower(check.State) {
+		switch strings.ToLower(check.AggregatedState) {
 		case "unhealthy":
 			checks[idx].StatePriority = 1
 		case "degraded":

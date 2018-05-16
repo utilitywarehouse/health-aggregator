@@ -51,7 +51,7 @@ func NewHealthChecker(k8sClient *kubernetes.Clientset) HealthChecker {
 }
 
 // DoHealthchecks performs http requests to retrieve health check responses for Services on a channel of type Service.
-// Responses are sent to a channel of type HealthcheckResp and any errors are sent to a channel of type error.
+// Responses are sent to a channel of type model.ServiceStatus and any errors are sent to a channel of type error.
 func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, errs chan error) {
 	readers := 10
 	for i := 0; i < readers; i++ {
