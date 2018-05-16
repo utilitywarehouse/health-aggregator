@@ -204,6 +204,9 @@ func getAppPortForService(k8sService *v1.Service, serviceScrapePort string) stri
 			if port.TargetPort.StrVal != "" {
 				return port.TargetPort.StrVal
 			}
+			if port.TargetPort.IntVal != 0 {
+				return strconv.Itoa(int(port.TargetPort.IntVal))
+			}
 		}
 	}
 	return serviceScrapePort
