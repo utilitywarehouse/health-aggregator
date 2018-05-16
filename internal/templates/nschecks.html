@@ -96,55 +96,57 @@
                             <dt>State</dt>
                             <dd>{{.AggregatedState}}</dd>
                             {{if ne .AggregatedState "healthy"}}
+                            {{if .Error}}
                             <dt>Error</dt>
                             <samp style="font-size:0.8em">{{.Error}}</samp>
+                            {{end}}
                             <!-- if ne .AggregatedState "healthy" -->
                             {{end}}
                             <hr>
                             {{if .PodChecks}}
-                            <details>
-                                <summary style="padding-bottom: 10px;font-weight: bold;">Checks</summary>
-                                    {{range .PodChecks}}
-                                    <details>
-                                        {{if eq .State "healthy"}}
-                                        <summary class="text-success podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
-                                        {{end}}
-                                        {{if eq .State "unhealthy"}}
-                                        <summary class="text-danger podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
-                                        {{end}}
-                                        {{if eq .State "degraded"}}
-                                        <summary class="text-warning podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
-                                        {{end}}
-                                        <p><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></p>
-                                        <dt>State</dt>
-                                        <dd>State: {{.State}}</dd>
-                                        <dt>Status Code</dt>
-                                        <dd>{{.StatusCode}}</dd>
-                                        <dt>Error</dt>
-                                        <samp style="font-size:0.8em">{{.Error}}</samp>
-                                        <hr>
-                                        {{if .Body}}
-                                        {{if .Body.Checks}}
-                                        {{range .Body.Checks}}
-                                        <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
-                                        <div class="check-info">
-                                            {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
-                                            {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
-                                            {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
-                                        </div>
-                                        <!-- range .Body.Checks -->
-                                        {{end}}
-                                        <!-- if .Body.Checks -->
-                                        {{end}}
-                                        <!-- if .Body -->
-                                        {{end}}
-                                    </details>
+                            <dt>Checks</dt>
+                                {{range .PodChecks}}
+                                <details>
+                                    {{if eq .State "healthy"}}
+                                    <summary class="text-success podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    {{if eq .State "unhealthy"}}
+                                    <summary class="text-danger podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    {{if eq .State "degraded"}}
+                                    <summary class="text-warning podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    <p><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></p>
+                                    <dt>State</dt>
+                                    <dd>State: {{.State}}</dd>
+                                    <dt>Status Code</dt>
+                                    <dd>{{.StatusCode}}</dd>
+                                    {{if .Error}}
+                                    <dt>Error</dt>
+                                    <samp style="font-size:0.8em">{{.Error}}</samp>
+                                    {{end}}
+                                    <hr>
+                                    {{if .Body}}
+                                    {{if .Body.Checks}}
+                                    {{range .Body.Checks}}
+                                    <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
+                                    <div class="check-info">
+                                        {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
+                                        {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
+                                        {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
+                                    </div>
+                                    <!-- range .Body.Checks -->
+                                    {{end}}
+                                    <!-- if .Body.Checks -->
+                                    {{end}}
+                                    <!-- if .Body -->
+                                    {{end}}
+                                </details>
                                 
                                 
                                 <!-- range .PodChecks -->
                                 {{end}}
                                 <hr>
-                            </details>
                             <!-- if .PodChecks -->
                             {{end}}
                             <dt>Last Checked</dt>

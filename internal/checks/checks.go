@@ -105,23 +105,23 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					}
 
 					// report how many of the running pods are unhealthy
-					var podsUnhealthMsg string
+					var podsUnhealthyMsg string
 					if noOfUnavailablePods > 0 {
-						podsUnhealthMsg = fmt.Sprintf("%v/%v pods failed health checks", noOfUnavailablePods, len(pods))
+						podsUnhealthyMsg = fmt.Sprintf("%v/%v pods failed health checks", noOfUnavailablePods, len(pods))
 					}
 
 					switch {
-					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthMsg + " - " + podsFewerThanDesiredReplicasMsg}
+					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
 						continue
 					case podsFewerThanDesiredReplicasMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
 						continue
-					case podsUnhealthMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthMsg}
+					case podsUnhealthyMsg != "":
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 						continue
 					default:
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses}
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 					}
 				}
 			}
@@ -202,6 +202,11 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 
 	podHealthResponse.State = health.Health
 	podHealthResponse.Body = *health
+
+	if podHealthResponse.Body.Health != healthy {
+		podHealthResponse.Error = "pod failing one or more health checks"
+		return podHealthResponse, errors.New(podHealthResponse.Error)
+	}
 
 	return podHealthResponse, nil
 }
