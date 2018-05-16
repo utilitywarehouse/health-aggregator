@@ -121,7 +121,7 @@ func main() {
 
 		errs := make(chan error, 10)
 		healthchecks := make(chan model.Service, 1000)
-		responses := make(chan model.HealthcheckResp, 1000)
+		statusResponses := make(chan model.ServiceStatus, 1000)
 		namespaces := make(chan model.Namespace, 10)
 		services := make(chan model.Service, 10)
 
@@ -138,7 +138,7 @@ func main() {
 		go httpserver.Start(server)
 		go initHTTPServer(*opsPort, mgoSess)
 
-		c := checks.NewHealthChecker()
+		c := checks.NewHealthChecker(kubeClient)
 
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
@@ -156,8 +156,8 @@ func main() {
 			}
 		}()
 
-		go c.DoHealthchecks(healthchecks, responses, errs)
-		go db.InsertHealthcheckResponses(mgoRepo, responses, errs)
+		go c.DoHealthchecks(healthchecks, statusResponses, errs)
+		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
 
 		go func() {
 			for e := range errs {
