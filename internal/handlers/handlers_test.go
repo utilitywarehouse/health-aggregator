@@ -251,12 +251,12 @@ func Test_GetAllChecksForServiceReturnsEmptyListWhenNoneExist(t *testing.T) {
 	body, readErr := ioutil.ReadAll(resp.Body)
 	require.NoError(t, readErr)
 
-	var returnedChecks []model.HealthcheckResp
+	var returnedChecks []model.ServiceStatus
 	jsonErr := json.Unmarshal(body, &returnedChecks)
 	if jsonErr != nil {
 		require.NoError(t, jsonErr)
 	}
-	assert.Equal(t, len([]model.HealthcheckResp{}), len(returnedChecks))
+	assert.Equal(t, len([]model.ServiceStatus{}), len(returnedChecks))
 }
 func Test_GetAllChecksForService(t *testing.T) {
 	repoCopy := s.repo.WithNewSession()
@@ -268,19 +268,22 @@ func Test_GetAllChecksForService(t *testing.T) {
 	s1Name := helpers.String(10)
 	s2Name := helpers.String(10)
 
+	s1Pods := []string{"s1Pod1", "s1Pod2"}
+	s2Pods := []string{"s2Pod1", "s2Pod2"}
+
 	// Create checks for a single service in a specific namespace
-	chk1 := helpers.GenerateDummyCheck(s1Name, ns1Name)
-	chk2 := helpers.GenerateDummyCheck(s1Name, ns1Name)
+	chk1 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
+	chk2 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
 
 	// Create a check against a different service in the same namespace
-	chk3 := helpers.GenerateDummyCheck(s2Name, ns1Name)
+	chk3 := helpers.GenerateDummyServiceStatus(s2Name, ns1Name, s2Pods)
 
 	// Create a check against a service with the same name, but within a different namespace
-	chk4 := helpers.GenerateDummyCheck(s1Name, ns2Name)
+	chk4 := helpers.GenerateDummyServiceStatus(s1Name, ns2Name, s1Pods)
 	dbutils.InsertItems(repoCopy, chk1, chk2, chk3, chk4)
 
 	// We only expect checks returned for a specific service within a specific namespace
-	expectedHealthChecks := []model.HealthcheckResp{chk1, chk2}
+	expectedHealthChecks := []model.ServiceStatus{chk1, chk2}
 
 	// Make the request
 	resp := httptest.NewRecorder()
@@ -297,38 +300,13 @@ func Test_GetAllChecksForService(t *testing.T) {
 	require.NoError(t, readErr)
 
 	// Get the returned health check response
-	var returnedHealthChecks []model.HealthcheckResp
+	var returnedHealthChecks []model.ServiceStatus
 	jsonErr := json.Unmarshal(body, &returnedHealthChecks)
 	if jsonErr != nil {
 		require.NoError(t, jsonErr)
 	}
 
-	// Check we have the number of checks for the service that belongs to the correct namespace (ns1Name)
-	require.Equal(t, len(expectedHealthChecks), len(returnedHealthChecks))
-
-	for _, expHC := range expectedHealthChecks {
-		returnedHealthCheck := helpers.FindHealthcheckRespByError(expHC.Error, returnedHealthChecks)
-		assert.Equal(t, expHC.Error, returnedHealthCheck.Error)
-		assert.Equal(t, expHC.CheckTime.Format("2006-01-02T15:04:05.000Z"), returnedHealthCheck.CheckTime.Format("2006-01-02T15:04:05.000Z")) // Formatted since mongo returns timestamps with truncated accuracy
-		assert.Equal(t, expHC.StatusCode, returnedHealthCheck.StatusCode)
-		assert.Equal(t, expHC.Service.Name, returnedHealthCheck.Service.Name)
-		assert.Equal(t, expHC.Service.Namespace, returnedHealthCheck.Service.Namespace)
-		assert.Equal(t, expHC.Service.HealthcheckURL, returnedHealthCheck.Service.HealthcheckURL)
-		assert.Equal(t, expHC.Service.HealthAnnotations.Port, returnedHealthCheck.Service.HealthAnnotations.Port)
-		assert.Equal(t, expHC.Service.HealthAnnotations.EnableScrape, returnedHealthCheck.Service.HealthAnnotations.EnableScrape)
-		assert.Equal(t, expHC.Body.Name, returnedHealthCheck.Body.Name)
-		assert.Equal(t, expHC.Body.Health, returnedHealthCheck.Body.Health)
-		assert.Equal(t, expHC.Body.Description, returnedHealthCheck.Body.Description)
-
-		for _, expC := range expHC.Body.Checks {
-			returnedCheck := helpers.FindCheckByName(expC.Name, returnedHealthCheck.Body.Checks)
-			assert.Equal(t, expC.Action, returnedCheck.Action)
-			assert.Equal(t, expC.Health, returnedCheck.Health)
-			assert.Equal(t, expC.Impact, returnedCheck.Impact)
-			assert.Equal(t, expC.Name, returnedCheck.Name)
-			assert.Equal(t, expC.Output, returnedCheck.Output)
-		}
-	}
+	assertEqual(t, expectedHealthChecks, returnedHealthChecks)
 }
 
 func Test_GetLatestChecksForNamespaceJSONReturnsEmptyListWhenNoneExist(t *testing.T) {
@@ -350,12 +328,12 @@ func Test_GetLatestChecksForNamespaceJSONReturnsEmptyListWhenNoneExist(t *testin
 	body, readErr := ioutil.ReadAll(resp.Body)
 	require.NoError(t, readErr)
 
-	var returnedChecks []model.HealthcheckResp
+	var returnedChecks []model.ServiceStatus
 	jsonErr := json.Unmarshal(body, &returnedChecks)
 	if jsonErr != nil {
 		require.NoError(t, jsonErr)
 	}
-	assert.Equal(t, len([]model.HealthcheckResp{}), len(returnedChecks))
+	assert.Equal(t, len([]model.ServiceStatus{}), len(returnedChecks))
 	assert.Equal(t, "application/json; charset=utf-8", resp.Header().Get("Content-Type"))
 }
 
@@ -391,22 +369,25 @@ func Test_GetLatestChecksForNamespaceJSON(t *testing.T) {
 	s1Name := helpers.String(10)
 	s2Name := helpers.String(10)
 
+	s1Pods := []string{"s1Pod1", "s1Pod2"}
+	s2Pods := []string{"s2Pod1", "s2Pod2"}
+
 	// Create checks for a single service in a specific namespace
-	chk1 := helpers.GenerateDummyCheck(s1Name, ns1Name)
+	chk1 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
 	time.Sleep(time.Millisecond * 200)
-	chk2 := helpers.GenerateDummyCheck(s1Name, ns1Name)
+	chk2 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
 
 	// Create checks against a different service in the same namespace
-	chk3 := helpers.GenerateDummyCheck(s2Name, ns1Name)
+	chk3 := helpers.GenerateDummyServiceStatus(s2Name, ns1Name, s2Pods)
 	time.Sleep(time.Millisecond * 200)
-	chk4 := helpers.GenerateDummyCheck(s2Name, ns1Name)
+	chk4 := helpers.GenerateDummyServiceStatus(s2Name, ns1Name, s2Pods)
 
 	// Create a check against a service with the same name, but within a different namespace
-	chk5 := helpers.GenerateDummyCheck(s1Name, ns2Name)
+	chk5 := helpers.GenerateDummyServiceStatus(s1Name, ns2Name, s1Pods)
 	dbutils.InsertItems(repoCopy, chk1, chk2, chk3, chk4, chk5)
 
 	// We only expect the LATEST checks to be returned, and only the ones for this namespace
-	expectedHealthChecks := []model.HealthcheckResp{chk2, chk4}
+	expectedHealthChecks := []model.ServiceStatus{chk2, chk4}
 
 	// Make the request
 	resp := httptest.NewRecorder()
@@ -424,51 +405,27 @@ func Test_GetLatestChecksForNamespaceJSON(t *testing.T) {
 	require.NoError(t, readErr)
 
 	// Get the returned health check response
-	var returnedHealthChecks []model.HealthcheckResp
+	var returnedHealthChecks []model.ServiceStatus
 	jsonErr := json.Unmarshal(body, &returnedHealthChecks)
 	if jsonErr != nil {
 		require.NoError(t, jsonErr)
 	}
 
-	// Check we have the number of checks for the services that belongs to the correct namespace (ns1Name)
-	require.Equal(t, len(expectedHealthChecks), len(returnedHealthChecks))
-
-	for _, expHC := range expectedHealthChecks {
-		returnedHealthCheck := helpers.FindHealthcheckRespByError(expHC.Error, returnedHealthChecks)
-		assert.Equal(t, expHC.Error, returnedHealthCheck.Error)
-		assert.Equal(t, expHC.CheckTime.Format("2006-01-02T15:04:05.000Z"), returnedHealthCheck.CheckTime.Format("2006-01-02T15:04:05.000Z")) // Formatted since mongo returns timestamps with truncated accuracy
-		assert.Equal(t, expHC.StatusCode, returnedHealthCheck.StatusCode)
-		assert.Equal(t, expHC.Service.Name, returnedHealthCheck.Service.Name)
-		assert.Equal(t, expHC.Service.Namespace, returnedHealthCheck.Service.Namespace)
-		assert.Equal(t, expHC.Service.HealthcheckURL, returnedHealthCheck.Service.HealthcheckURL)
-		assert.Equal(t, expHC.Service.HealthAnnotations.Port, returnedHealthCheck.Service.HealthAnnotations.Port)
-		assert.Equal(t, expHC.Service.HealthAnnotations.EnableScrape, returnedHealthCheck.Service.HealthAnnotations.EnableScrape)
-		assert.Equal(t, expHC.Body.Name, returnedHealthCheck.Body.Name)
-		assert.Equal(t, expHC.Body.Health, returnedHealthCheck.Body.Health)
-		assert.Equal(t, expHC.Body.Description, returnedHealthCheck.Body.Description)
-
-		for _, expC := range expHC.Body.Checks {
-			returnedCheck := helpers.FindCheckByName(expC.Name, returnedHealthCheck.Body.Checks)
-			assert.Equal(t, expC.Action, returnedCheck.Action)
-			assert.Equal(t, expC.Health, returnedCheck.Health)
-			assert.Equal(t, expC.Impact, returnedCheck.Impact)
-			assert.Equal(t, expC.Name, returnedCheck.Name)
-			assert.Equal(t, expC.Output, returnedCheck.Output)
-		}
-	}
+	assertEqual(t, expectedHealthChecks, returnedHealthChecks)
 }
 
 func Test_EnrichChecksData(t *testing.T) {
 
-	healthyCheck := helpers.GenerateDummyCheck("healthy-service", "a-namespace", "healthy")
-	degradedCheck := helpers.GenerateDummyCheck("degraded-service", "a-namespace", "degraded")
-	unhealthyCheck := helpers.GenerateDummyCheck("unhealthy-service", "a-namespace", "unhealthy")
+	pods := []string{"pod1"}
+	healthyCheck := helpers.GenerateDummyServiceStatus("healthy-service", "a-namespace", pods, "healthy")
+	degradedCheck := helpers.GenerateDummyServiceStatus("degraded-service", "a-namespace", pods, "degraded")
+	unhealthyCheck := helpers.GenerateDummyServiceStatus("unhealthy-service", "a-namespace", pods, "unhealthy")
 
 	// Set times to something predictable
 	healthyCheck.CheckTime = time.Now().AddDate(0, 0, -7)  // 1 week ago
 	healthyCheck.StateSince = time.Now().AddDate(0, 0, -3) // 3 days ago
 
-	checks := []model.HealthcheckResp{healthyCheck, degradedCheck, unhealthyCheck}
+	checks := []model.ServiceStatus{healthyCheck, degradedCheck, unhealthyCheck}
 
 	enrichChecksData(checks)
 
@@ -478,4 +435,44 @@ func Test_EnrichChecksData(t *testing.T) {
 
 	assert.Equal(t, "1 week ago", checks[0].HumanisedCheckTime)
 	assert.Equal(t, "3 days ago", checks[0].HumanisedStateSince)
+}
+
+func assertEqual(t *testing.T, expectedHealthChecks []model.ServiceStatus, actualHealthChecks []model.ServiceStatus) {
+	require.Equal(t, len(expectedHealthChecks), len(actualHealthChecks))
+
+	for _, expHC := range expectedHealthChecks {
+		actualHealthCheck := helpers.FindHealthcheckRespByError(expHC.Error, actualHealthChecks)
+		assert.Equal(t, expHC.Error, actualHealthCheck.Error)
+		assert.Equal(t, expHC.CheckTime.Format("2006-01-02T15:04:05.000Z"), actualHealthCheck.CheckTime.Format("2006-01-02T15:04:05.000Z")) // Formatted since mongo returns timestamps with truncated accuracy
+
+		assert.Equal(t, expHC.Service.Name, actualHealthCheck.Service.Name)
+		assert.Equal(t, expHC.Service.Namespace, actualHealthCheck.Service.Namespace)
+		assert.Equal(t, expHC.Service.HealthcheckURL, actualHealthCheck.Service.HealthcheckURL)
+		assert.Equal(t, expHC.Service.HealthAnnotations.Port, actualHealthCheck.Service.HealthAnnotations.Port)
+		assert.Equal(t, expHC.Service.HealthAnnotations.EnableScrape, actualHealthCheck.Service.HealthAnnotations.EnableScrape)
+		assert.Equal(t, expHC.Service.AppPort, actualHealthCheck.Service.AppPort)
+		assert.Equal(t, expHC.Service.Deployment.DesiredReplicas, actualHealthCheck.Service.Deployment.DesiredReplicas)
+
+		for _, expPC := range expHC.PodChecks {
+			actualPodCheck := helpers.FindPodCheckByName(expPC.Name, actualHealthCheck.PodChecks)
+			assert.Equal(t, expPC.Name, actualPodCheck.Name)
+			assert.Equal(t, expPC.CheckTime.Format("2006-01-02T15:04:05.000Z"), actualPodCheck.CheckTime.Format("2006-01-02T15:04:05.000Z")) // Formatted since mongo returns timestamps with truncated accuracy
+			assert.Equal(t, expPC.State, actualPodCheck.State)
+			assert.Equal(t, expPC.StatusCode, actualPodCheck.StatusCode)
+			assert.Equal(t, expPC.Error, actualPodCheck.Error)
+
+			assert.Equal(t, expPC.Body.Name, actualPodCheck.Body.Name)
+			assert.Equal(t, expPC.Body.Health, actualPodCheck.Body.Health)
+			assert.Equal(t, expPC.Body.Description, actualPodCheck.Body.Description)
+
+			for _, expC := range expPC.Body.Checks {
+				actualCheck := helpers.FindCheckByName(expC.Name, actualPodCheck.Body.Checks)
+				assert.Equal(t, expC.Action, actualCheck.Action)
+				assert.Equal(t, expC.Health, actualCheck.Health)
+				assert.Equal(t, expC.Impact, actualCheck.Impact)
+				assert.Equal(t, expC.Name, actualCheck.Name)
+				assert.Equal(t, expC.Output, actualCheck.Output)
+			}
+		}
+	}
 }

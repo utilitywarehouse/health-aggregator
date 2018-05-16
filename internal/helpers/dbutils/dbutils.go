@@ -17,7 +17,7 @@ func InsertItems(mgoRepo *db.MongoRepository, objs ...interface{}) {
 	}
 }
 
-// InsertItem inserts a single Service, Namespace or HealthcheckResp into the DB
+// InsertItem inserts a single Service, Namespace or ServiceStatus into the DB
 func InsertItem(mgoRepo *db.MongoRepository, obj interface{}) {
 	var objType string
 	var collection string
@@ -30,8 +30,8 @@ func InsertItem(mgoRepo *db.MongoRepository, obj interface{}) {
 		obj = obj.(model.Namespace)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.NamespacesCollection
-	case model.HealthcheckResp:
-		obj = obj.(model.HealthcheckResp)
+	case model.ServiceStatus:
+		obj = obj.(model.ServiceStatus)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.HealthchecksCollection
 	default:

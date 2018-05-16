@@ -39,19 +39,64 @@ func String(length int) string {
 	return stringWithCharset(length, charset)
 }
 
-// GenerateDummyCheck generates a dummy healthcheck response (model.HealthcheckResp) with either random
+// GenerateDummyServiceStatus generates a dummy healthcheck response (model.HealthcheckResp) with either random
 // state (healthy/unhealthy/degraded) or with the provided state string
-func GenerateDummyCheck(serviceName string, namespaceName string, state ...string) model.HealthcheckResp {
-	var healthCheck model.HealthcheckResp
+func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNames []string, state ...string) model.ServiceStatus {
+	var healthCheck model.ServiceStatus
 
+	// Service
 	var svc model.Service
 	svc.Name = serviceName
 	svc.Namespace = namespaceName
 	svc.HealthcheckURL = fmt.Sprintf("http://%s.%s/__/health", namespaceName, serviceName)
 	svc.HealthAnnotations.EnableScrape = "true"
 	svc.HealthAnnotations.Port = "3000"
+	svc.AppPort = "8080"
+
+	var deployInfo model.DeployInfo
+	deployInfo.DesiredReplicas = int32(len(podNames))
+
+	svc.Deployment = deployInfo
+
 	healthCheck.Service = svc
 
+	// CheckTime
+	healthCheck.CheckTime = time.Now().UTC()
+
+	// PodChecks
+	var podChecks []model.PodHealthResponse
+	for _, podName := range podNames {
+		var podHealthResponse model.PodHealthResponse
+		podHealthResponse = generateDummyPodHealthResponse(podName, state...)
+		podChecks = append(podChecks, podHealthResponse)
+	}
+	healthCheck.PodChecks = podChecks
+
+	// Aggregated state
+	if len(state) == 1 {
+		healthCheck.AggregatedState = state[0]
+	} else {
+		healthCheck.AggregatedState = "unhealthy"
+	}
+
+	healthCheck.Error = String(10)
+
+	return healthCheck
+}
+
+func generateDummyPodHealthResponse(podName string, state ...string) model.PodHealthResponse {
+	var podHealthResponse model.PodHealthResponse
+	podHealthResponse.Name = podName
+	podHealthResponse.Body = generateDummyHealthcheckBody(state...)
+	podHealthResponse.Error = String(10)
+	podHealthResponse.StatusCode = 200
+	if len(state) == 1 {
+		podHealthResponse.State = state[0]
+	}
+	return podHealthResponse
+}
+
+func generateDummyHealthcheckBody(state ...string) model.HealthcheckBody {
 	var checkBody model.HealthcheckBody
 
 	var health string
@@ -78,12 +123,7 @@ func GenerateDummyCheck(serviceName string, namespaceName string, state ...strin
 	}
 	checkBody.Checks = checks
 
-	healthCheck.Body = checkBody
-	healthCheck.CheckTime = time.Now().UTC()
-	healthCheck.State = health
-	healthCheck.Error = String(10)
-	healthCheck.StatusCode = 500
-	return healthCheck
+	return checkBody
 }
 
 func randomHealthState() string {
@@ -94,14 +134,14 @@ func randomHealthState() string {
 
 // FindHealthcheckRespByError returns the HealthcheckResp with the matching Error string from a provided
 // slice of type HealthcheckResp
-func FindHealthcheckRespByError(searchText string, hList []model.HealthcheckResp) model.HealthcheckResp {
+func FindHealthcheckRespByError(searchText string, hList []model.ServiceStatus) model.ServiceStatus {
 
 	for _, h := range hList {
 		if h.Error == searchText {
 			return h
 		}
 	}
-	return model.HealthcheckResp{}
+	return model.ServiceStatus{}
 }
 
 // FindCheckByName returns the Check with the matching Name string from a provided slice of type Check
@@ -110,6 +150,17 @@ func FindCheckByName(searchText string, cList []model.Check) model.Check {
 	for _, c := range cList {
 		if c.Name == searchText {
 			return c
+		}
+	}
+	return chk
+}
+
+// FindPodCheckByName returns the Check with the matching Name string from a provided slice of type Check
+func FindPodCheckByName(searchText string, pList []model.PodHealthResponse) model.PodHealthResponse {
+	var chk model.PodHealthResponse
+	for _, p := range pList {
+		if p.Name == searchText {
+			return p
 		}
 	}
 	return chk
@@ -175,6 +226,9 @@ func TestSliceServicesEquality(a, b []model.Service) error {
 		}
 		if a[i].HealthAnnotations.Port != b[i].HealthAnnotations.Port {
 			return fmt.Errorf("a[%v].HealthAnnotations.Port != b[%v].HealthAnnotations.Port, value a: %v value b: %v", i, i, a[i].HealthAnnotations.Port, b[i].HealthAnnotations.Port)
+		}
+		if a[i].AppPort != b[i].AppPort {
+			return fmt.Errorf("a[%v].AppPort != b[%v].AppPort, value a: %v value b: %v", i, i, a[i].AppPort, b[i].AppPort)
 		}
 	}
 

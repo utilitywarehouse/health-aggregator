@@ -224,8 +224,8 @@ func insertItem(mgoRepo *MongoRepository, obj interface{}) {
 		obj = obj.(model.Namespace)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.NamespacesCollection
-	case model.HealthcheckResp:
-		obj = obj.(model.HealthcheckResp)
+	case model.ServiceStatus:
+		obj = obj.(model.ServiceStatus)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.HealthchecksCollection
 	default:
