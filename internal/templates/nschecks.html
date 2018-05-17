@@ -117,10 +117,18 @@
                                     <summary class="text-warning podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
                                     {{end}}
                                     <p><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></p>
-                                    <dt>State</dt>
-                                    <dd>State: {{.State}}</dd>
-                                    <dt>Status Code</dt>
-                                    <dd>{{.StatusCode}}</dd>
+                                    <div style="display:flex;">
+                                            <div style="width:50%;">
+                                            <dt>State</dt>
+                                            <dd>{{.State}}</dd>
+                                        </div>
+                                        <div style="width:50%;">
+                                            {{if ne .StatusCode 0}}
+                                            <dt>Status Code</dt>
+                                            <dd>{{.StatusCode}}</dd>
+                                            {{end}}
+                                        </div>
+                                    </div>
                                     {{if .Error}}
                                     <dt>Error</dt>
                                     <samp style="font-size:0.8em">{{.Error}}</samp>

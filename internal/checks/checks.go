@@ -170,7 +170,7 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		podHealthResponse.Error = "error performing healthcheck request"
+		podHealthResponse.Error = "error performing healthcheck request: " + err.Error()
 		return podHealthResponse, errors.New(podHealthResponse.Error + ": " + err.Error())
 	}
 
