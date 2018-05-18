@@ -13,76 +13,100 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 )
 
+// K8sServicesConfigUpdater is a receiver object allowing UpsertServiceConfigs to be called
+type K8sServicesConfigUpdater struct {
+	Services chan model.Service
+	Repo     *MongoRepository
+}
+
+// K8sNamespacesConfigUpdater is a receiver object allowing UpsertNamespaceConfigs to be called
+type K8sNamespacesConfigUpdater struct {
+	Namespaces chan model.Namespace
+	Repo       *MongoRepository
+}
+
+// NewK8sServicesConfigUpdater creates a new K8sServicesConfigUpdater
+func NewK8sServicesConfigUpdater(services chan model.Service, repo *MongoRepository) K8sServicesConfigUpdater {
+
+	return K8sServicesConfigUpdater{
+		Services: services,
+		Repo:     repo,
+	}
+}
+
+// NewK8sNamespacesConfigUpdater creates a new K8sNamespacesConfigUpdater
+func NewK8sNamespacesConfigUpdater(namespaces chan model.Namespace, repo *MongoRepository) K8sNamespacesConfigUpdater {
+
+	return K8sNamespacesConfigUpdater{
+		Namespaces: namespaces,
+		Repo:       repo,
+	}
+}
+
 // UpsertServiceConfigs inserts or updates Services from a provided cannel of type Service, sending any
 // errors to a channel of type error
-func UpsertServiceConfigs(mgoRepo *MongoRepository, services chan model.Service, errs chan error) {
+func (k K8sServicesConfigUpdater) UpsertServiceConfigs() {
 
-	go func(services chan model.Service) {
-		defer mgoRepo.Close()
-		for s := range services {
+	defer k.Repo.Close()
+	for s := range k.Services {
+		collection := k.Repo.Db().C(constants.ServicesCollection)
 
-			collection := mgoRepo.Db().C(constants.ServicesCollection)
-
-			_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
-			if err != nil {
-				log.WithError(err).Errorf("failed to insert service %s in namespace %s", s.Name, s.Namespace)
-				return
-			}
+		_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
+		if err != nil {
+			log.WithError(err).Errorf("failed to insert service %s in namespace %s", s.Name, s.Namespace)
+			return
 		}
-	}(services)
+	}
 }
 
 // UpsertNamespaceConfigs inserts or updates Namespaces from a provided cannel of type Namespace, sending any
 // errors to a channel of type error
-func UpsertNamespaceConfigs(mgoRepo *MongoRepository, namespaces chan model.Namespace, errs chan error) {
+func (k K8sNamespacesConfigUpdater) UpsertNamespaceConfigs() {
 
-	go func(namespaces chan model.Namespace) {
-		defer mgoRepo.Close()
-		for n := range namespaces {
+	defer k.Repo.Close()
+	for n := range k.Namespaces {
 
-			collection := mgoRepo.Db().C(constants.NamespacesCollection)
+		collection := k.Repo.Db().C(constants.NamespacesCollection)
 
-			_, err := collection.Upsert(bson.M{"name": n.Name}, n)
-			if err != nil {
-				log.WithError(err).Errorf("failed to insert namespace %s", n.Name)
-				return
-			}
+		_, err := collection.Upsert(bson.M{"name": n.Name}, n)
+		if err != nil {
+			log.WithError(err).Errorf("failed to insert namespace %s", n.Name)
+			return
 		}
-	}(namespaces)
+	}
 }
 
 // InsertHealthcheckResponses inserts health check responses picked from a channel of type ServiceStatus, sending any
 // errors to a channel of type error
 func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error) {
 
-	go func(statusResponses chan model.ServiceStatus) {
-		repoCopy := mgoRepo.WithNewSession()
-		defer repoCopy.Close()
-		for r := range statusResponses {
+	repoCopy := mgoRepo.WithNewSession()
+	defer repoCopy.Close()
+	for r := range statusResponses {
 
-			collection := repoCopy.Db().C(constants.HealthchecksCollection)
+		collection := repoCopy.Db().C(constants.HealthchecksCollection)
 
-			var prevCheckResponse model.ServiceStatus
-			if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
-				if err != mgo.ErrNotFound {
-					log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
-				}
-			}
-
-			if prevCheckResponse.AggregatedState != r.AggregatedState {
-				r.StateSince = r.CheckTime
-				r.PreviousState = prevCheckResponse.AggregatedState
-			} else {
-				r.StateSince = prevCheckResponse.StateSince
-			}
-
-			err := collection.Insert(r)
-			if err != nil {
-				log.WithError(err).Errorf("failed to insert healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
-				return
+		var prevCheckResponse model.ServiceStatus
+		if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
+			if err != mgo.ErrNotFound {
+				log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
 			}
 		}
-	}(statusResponses)
+
+		if prevCheckResponse.AggregatedState != r.AggregatedState {
+			r.StateSince = r.CheckTime
+			r.PreviousState = r.AggregatedState
+		} else {
+			r.StateSince = prevCheckResponse.StateSince
+			r.PreviousState = prevCheckResponse.AggregatedState
+		}
+
+		err := collection.Insert(r)
+		if err != nil {
+			log.WithError(err).Errorf("failed to insert healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
+			return
+		}
+	}
 }
 
 // FindAllServices finds all Services regardless of Namespace
@@ -115,8 +139,8 @@ func FindAllNamespaces(mgoRepo *MongoRepository) ([]model.Namespace, error) {
 	return ns, nil
 }
 
-// FindAllServicesForNameSpace finds all Services for a given Namespace Name
-func FindAllServicesForNameSpace(mgoRepo *MongoRepository, ns string) ([]model.Service, error) {
+// FindAllServicesForNamespace finds all Services for a given Namespace Name
+func FindAllServicesForNamespace(mgoRepo *MongoRepository, ns string) ([]model.Service, error) {
 
 	collection := mgoRepo.Db().C(constants.ServicesCollection)
 

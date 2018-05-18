@@ -122,16 +122,10 @@ func main() {
 		errs := make(chan error, 10)
 		healthchecks := make(chan model.Service, 1000)
 		statusResponses := make(chan model.ServiceStatus, 1000)
-		namespaces := make(chan model.Namespace, 10)
-		services := make(chan model.Service, 10)
-
-		go db.UpsertNamespaceConfigs(mgoRepo.WithNewSession(), namespaces, errs)
-		go db.UpsertServiceConfigs(mgoRepo.WithNewSession(), services, errs)
 
 		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
-		s := &discovery.ServiceDiscovery{K8sClient: kubeClient, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
 
-		router := handlers.NewRouter(s, mgoRepo)
+		router := handlers.NewRouter(mgoRepo, kubeClient)
 		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
 		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)

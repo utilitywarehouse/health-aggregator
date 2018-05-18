@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestOverrideParentAnnotations(t *testing.T) {
+func Test_OverrideParentAnnotations(t *testing.T) {
 	parentAnnotations := model.HealthAnnotations{Port: "9080", EnableScrape: "false"}
 
 	childAnnotations := model.HealthAnnotations{Port: "8080", EnableScrape: "true"}
@@ -38,7 +38,7 @@ func TestOverrideParentAnnotations(t *testing.T) {
 
 	assert.Equal(t, overriddenAnnotations, parentAnnotations)
 }
-func TestGetHealthAnnotations(t *testing.T) {
+func Test_GetHealthAnnotations(t *testing.T) {
 	client := setUpTest(t)
 
 	ns, err := client.Core().Namespaces().Get("energy", metav1.GetOptions{})
@@ -67,14 +67,14 @@ func TestGetHealthAnnotations(t *testing.T) {
 	assert.Equal(t, "false", retrievedAnnotations.EnableScrape)
 	assert.Equal(t, "8081", retrievedAnnotations.Port)
 }
-func TestGetClusterHealthcheckConfig(t *testing.T) {
+func Test_GetClusterHealthcheckConfig(t *testing.T) {
 	client := setUpTest(t)
 
 	namespaces := make(chan model.Namespace, 10)
 	services := make(chan model.Service, 10)
 	errs := make(chan error, 10)
 
-	s := &ServiceDiscovery{K8sClient: client, Label: "	", Namespaces: namespaces, Services: services, Errors: errs}
+	s := &K8sDiscovery{K8sClient: client, Label: "	", Namespaces: namespaces, Services: services, Errors: errs}
 
 	go func() {
 		s.GetClusterHealthcheckConfig()

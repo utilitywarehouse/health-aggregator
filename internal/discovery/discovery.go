@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// ServiceDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
-type ServiceDiscovery struct {
+// K8sDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
+type K8sDiscovery struct {
 	K8sClient  kubernetes.Interface
 	Label      string
 	Namespaces chan model.Namespace
@@ -47,7 +47,7 @@ func NewKubeClient(kubeConfigPath string) *kubernetes.Clientset {
 }
 
 // GetClusterHealthcheckConfig method retrieves Namespace and Service annotations specific to health aggregator
-func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
+func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 
 	log.Info("loading namespace and service annotations")
 	defaultAnnotations := model.HealthAnnotations{EnableScrape: constants.DefaultEnableScrape, Port: constants.DefaultPort}
@@ -131,7 +131,7 @@ func (s *ServiceDiscovery) GetClusterHealthcheckConfig() {
 	}
 }
 
-func (s *ServiceDiscovery) getDeployments(namespaceName string) (map[string]model.DeployInfo, error) {
+func (s *K8sDiscovery) getDeployments(namespaceName string) (map[string]model.DeployInfo, error) {
 	deploymentList, err := s.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
