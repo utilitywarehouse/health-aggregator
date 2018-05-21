@@ -17,4 +17,10 @@ const (
 	HealthchecksCollection = "checks"
 	// DBName is the mongo database name
 	DBName = "healthaggregator"
+	// HealthAggregatorOutcome is the name of the metrics counter
+	HealthAggregatorOutcome = "health_aggregator_outcome"
+	// PerformedHealthcheckResult represents the result of the healthcheck e.g. was the healthcheck successfully called or not
+	PerformedHealthcheckResult = "performed_healthcheck_result"
+	// HealthAggregatorInFlight records the number of health checks which are currently in flight
+	HealthAggregatorInFlight = "health_aggregator_checks_in_flight"
 )

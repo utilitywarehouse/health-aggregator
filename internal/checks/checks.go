@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/utilitywarehouse/health-aggregator/internal/constants"
+
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	"k8s.io/api/core/v1"
@@ -39,24 +42,37 @@ type httpClient interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 
+// Metrics contains Counters and Gauges for this service
+type Metrics struct {
+	Counters map[string]*prometheus.CounterVec
+	Gauges   map[string]*prometheus.GaugeVec
+}
+
 // HealthChecker contains the httpClient
 type HealthChecker struct {
 	client    httpClient
 	k8sClient *kubernetes.Clientset
+	metrics   Metrics
 }
 
 // NewHealthChecker returns a struct with an httpClient
-func NewHealthChecker(k8sClient *kubernetes.Clientset) HealthChecker {
-	return HealthChecker{client: client, k8sClient: k8sClient}
+func NewHealthChecker(k8sClient *kubernetes.Clientset, metrics Metrics) HealthChecker {
+
+	return HealthChecker{client: client, k8sClient: k8sClient, metrics: metrics}
 }
 
 // DoHealthchecks performs http requests to retrieve health check responses for Services on a channel of type Service.
 // Responses are sent to a channel of type model.ServiceStatus and any errors are sent to a channel of type error.
 func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, errs chan error) {
+	aggregatorCounterVec := c.metrics.Counters[constants.HealthAggregatorOutcome]
+	inFlightChecksGaugeVec := c.metrics.Gauges[constants.HealthAggregatorInFlight]
+
 	readers := 10
 	for i := 0; i < readers; i++ {
 		go func(healthchecks chan model.Service) {
 			for svc := range healthchecks {
+				inFlightChecksGaugeVec.With(map[string]string{}).Inc()
+
 				serviceCheckTime := time.Now().UTC()
 				if svc.Deployment.DesiredReplicas > 0 {
 
@@ -73,6 +89,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 						case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: unhealthy, Error: errText}:
 						default:
 						}
+						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					}
 
@@ -80,6 +97,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					if len(pods) == 0 {
 						errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, Error: errMsg}
+						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					}
 
@@ -91,8 +109,15 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 
 						podHealthResponse, err := c.getHealthCheckForPod(pod, svc.AppPort)
 						if err != nil {
+							if aggregatorCounterVec != nil {
+								aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "failure"}).Inc()
+							}
 							noOfUnavailablePods++
 							log.Debugf("pod %v (service %v) health check returned an error: %v", pod.Name, pod.ServiceName, err.Error())
+						} else {
+							if aggregatorCounterVec != nil {
+								aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "success"}).Inc()
+							}
 						}
 
 						podHealthResponses = append(podHealthResponses, podHealthResponse)
@@ -113,17 +138,21 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					switch {
 					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
+						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					case podsFewerThanDesiredReplicasMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
+						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					case podsUnhealthyMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					default:
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 					}
 				}
+				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 			}
 		}(healthchecks)
 	}

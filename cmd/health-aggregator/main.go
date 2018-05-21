@@ -13,6 +13,7 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/jawher/mow.cli"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
 	"github.com/utilitywarehouse/go-operational/op"
@@ -99,11 +100,13 @@ func main() {
 
 	app.Action = func() {
 		log.Debug("dialling mongo")
+
 		mgoSess, err := mgo.Dial(*dbURL)
 		if err != nil {
 			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
 		}
 		defer mgoSess.Close()
+
 		mgoRepo := db.NewMongoRepository(mgoSess, constants.DBName)
 
 		// Drop the database if required
@@ -130,9 +133,12 @@ func main() {
 		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
 		go httpserver.Start(server)
-		go initHTTPServer(*opsPort, mgoSess)
 
-		c := checks.NewHealthChecker(kubeClient)
+		metrics := setupMetrics()
+
+		go initOpsHTTPServer(*opsPort, mgoSess, metrics)
+
+		c := checks.NewHealthChecker(kubeClient, metrics)
 
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
@@ -192,6 +198,39 @@ func setLogger(logLevel *string) {
 	log.SetLevel(lvl)
 }
 
+func setupMetrics() checks.Metrics {
+	var metrics checks.Metrics
+
+	metrics.Counters = setupCounters()
+	metrics.Gauges = setupGauges()
+
+	return metrics
+}
+
+func setupCounters() map[string]*prometheus.CounterVec {
+
+	counters := make(map[string]*prometheus.CounterVec)
+
+	counters[constants.HealthAggregatorOutcome] = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: constants.HealthAggregatorOutcome,
+		Help: "Counts health checks performed including the outcome (whether or not the healthcheck call was successful or not)",
+	}, []string{constants.PerformedHealthcheckResult})
+
+	return counters
+}
+
+func setupGauges() map[string]*prometheus.GaugeVec {
+
+	gauges := make(map[string]*prometheus.GaugeVec)
+
+	gauges[constants.HealthAggregatorInFlight] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: constants.HealthAggregatorInFlight,
+		Help: "Records the number of health checks which are in flight at any one time",
+	}, []string{})
+
+	return gauges
+}
+
 func createIndex(mgoRepo *db.MongoRepository) {
 	log.Debugf("creating mongodb index for collection %v", constants.HealthchecksCollection)
 	c := mgoRepo.Db().C(constants.HealthchecksCollection)
@@ -207,14 +246,23 @@ func createIndex(mgoRepo *db.MongoRepository) {
 	log.Debug("index creation successful")
 }
 
-func initHTTPServer(opsPort int, mgoSess *mgo.Session) {
+func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics checks.Metrics) {
 	log.Debug("starting ops server")
+
+	promMetrics := []prometheus.Collector{}
+	for _, cv := range metrics.Counters {
+		promMetrics = append(promMetrics, cv)
+	}
+	for _, gv := range metrics.Gauges {
+		promMetrics = append(promMetrics, gv)
+	}
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", opsPort), op.NewHandler(op.
 		NewStatus(constants.AppName, constants.AppDesc).
 		AddOwner("labs", "#labs").
 		AddLink("vcs", fmt.Sprintf("github.com/utilitywarehouse/health-aggegrator")).
 		SetRevision(gitHash).
 		AddChecker("mongo", healthcheck.NewMongoHealthCheck(mgoSess, "Unable to access mongo db")).
+		AddMetrics(promMetrics...).
 		ReadyUseHealthCheck().
 		WithInstrumentedChecks(),
 	)); err != nil {

@@ -48,7 +48,7 @@ func NewRouter(mgoRepo *db.MongoRepository, kubeClient *kubernetes.Clientset) *m
 	services := make(chan model.Service, 10)
 	errs := make(chan error, 10)
 
-	s := &discovery.K8sDiscovery{K8sClient: kubeClient, Label: "app", Namespaces: namespaces, Services: services, Errors: errs}
+	s := &discovery.K8sDiscovery{K8sClient: kubeClient, Namespaces: namespaces, Services: services, Errors: errs}
 	reloader := reloadHandler{discovery: s, namespaces: namespaces, services: services}
 
 	r.Handle("/reload", withRepoCopy(mgoRepo, reloader.reload)).Methods(http.MethodPost)

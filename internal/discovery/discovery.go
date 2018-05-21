@@ -17,7 +17,6 @@ import (
 // K8sDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
 type K8sDiscovery struct {
 	K8sClient  kubernetes.Interface
-	Label      string
 	Namespaces chan model.Namespace
 	Services   chan model.Service
 	Errors     chan error
@@ -80,7 +79,7 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 
 		log.Debugf("Added namespace %v to channel\n", n.Name)
 
-		services, err := s.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{LabelSelector: s.Label})
+		services, err := s.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{})
 		if err != nil {
 			select {
 			case s.Errors <- fmt.Errorf("Could not get services via kubernetes api: (%v)", err):
