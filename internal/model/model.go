@@ -10,6 +10,7 @@ type Service struct {
 	HealthAnnotations HealthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
 	AppPort           string            `json:"appPort" bson:"appPort"`
 	Deployment        DeployInfo        `json:"deployment" bson:"deployment"`
+	ComponentID       string            `json:"componentID" bson:"componentID"`
 }
 
 // Pod describes a k8s pod
@@ -85,4 +86,12 @@ type Check struct {
 type TemplatedChecks struct {
 	Namespace string
 	Checks    []ServiceStatus
+}
+
+// Component is a statuspage.io object
+type Component struct {
+	ID          string
+	Name        string
+	Status      string
+	Description string
 }

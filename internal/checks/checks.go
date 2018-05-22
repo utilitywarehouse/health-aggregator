@@ -2,7 +2,6 @@ package checks
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -10,11 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
+	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -30,12 +32,6 @@ var (
 			}).Dial,
 		},
 	}
-)
-
-const (
-	unhealthy = "unhealthy"
-	healthy   = "healthy"
-	degraded  = "degraded"
 )
 
 type httpClient interface {
@@ -63,7 +59,7 @@ func NewHealthChecker(k8sClient *kubernetes.Clientset, metrics Metrics) HealthCh
 
 // DoHealthchecks performs http requests to retrieve health check responses for Services on a channel of type Service.
 // Responses are sent to a channel of type model.ServiceStatus and any errors are sent to a channel of type error.
-func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, errs chan error) {
+func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, statuspageIOUpdates chan model.Component, errs chan error) {
 	aggregatorCounterVec := c.metrics.Counters[constants.HealthAggregatorOutcome]
 	inFlightChecksGaugeVec := c.metrics.Gauges[constants.HealthAggregatorInFlight]
 
@@ -86,7 +82,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 						default:
 						}
 						select {
-						case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: unhealthy, Error: errText}:
+						case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: constants.Unhealthy, Error: errText}:
 						default:
 						}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
@@ -96,7 +92,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					// no pods are running - no point scraping the health endpoints
 					if len(pods) == 0 {
 						errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, Error: errMsg}
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					}
@@ -137,24 +133,48 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 
 					switch {
 					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+						createUpdateStatusTask(svc, constants.Unhealthy, statuspageIOUpdates)
 						continue
 					case podsFewerThanDesiredReplicasMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+						createUpdateStatusTask(svc, constants.Unhealthy, statuspageIOUpdates)
 						continue
 					case podsUnhealthyMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+						aggregatedState := mostSevereState(podHealthResponses)
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+						createUpdateStatusTask(svc, aggregatedState, statuspageIOUpdates)
 						continue
 					default:
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: mostSevereState(podHealthResponses), PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+						aggregatedState := mostSevereState(podHealthResponses)
+						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+						createUpdateStatusTask(svc, aggregatedState, statuspageIOUpdates)
 					}
 				}
 				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 			}
 		}(healthchecks)
+	}
+}
+
+func createUpdateStatusTask(svc model.Service, status string, statuspageIOUpdates chan model.Component) {
+	// if desiredReplicas == 1 we do not have to aggregate health status and can update statuspage.io immediately
+	if svc.Deployment.DesiredReplicas == 1 {
+		// if there is no component id annotation, we do not attempt to update status
+		if svc.ComponentID != "" {
+			statuspageIOStatus, err := statuspage.MapUWStatusToStatuspageIOStatus(status)
+			if err != nil {
+				log.Error(errors.Wrap(err, "failed to update statuspage.io status"))
+				return
+			}
+			select {
+			case statuspageIOUpdates <- model.Component{ID: svc.ComponentID, Status: statuspageIOStatus}:
+			default:
+			}
+		}
 	}
 }
 
@@ -186,7 +206,7 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 	log.Debugf("Getting health check for pod " + pod.Name + " service " + pod.ServiceName)
 	var podHealthResponse model.PodHealthResponse
 	podHealthResponse.CheckTime = time.Now().UTC()
-	podHealthResponse.State = unhealthy
+	podHealthResponse.State = constants.Unhealthy
 	podHealthResponse.StatusCode = 0
 	podHealthResponse.Name = pod.Name
 
@@ -232,7 +252,7 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 	podHealthResponse.State = health.Health
 	podHealthResponse.Body = *health
 
-	if podHealthResponse.Body.Health != healthy {
+	if podHealthResponse.Body.Health != constants.Healthy {
 		podHealthResponse.Error = "pod failing one or more health checks"
 		return podHealthResponse, errors.New(podHealthResponse.Error)
 	}
@@ -242,11 +262,11 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 
 func assignStatePriority(health string) int {
 	switch strings.ToLower(health) {
-	case unhealthy:
+	case constants.Unhealthy:
 		return 1
-	case degraded:
+	case constants.Degraded:
 		return 2
-	case healthy:
+	case constants.Healthy:
 		return 3
 	}
 	return 99
@@ -264,11 +284,11 @@ func mostSevereState(podHealthResponses []model.PodHealthResponse) string {
 
 	switch mostSevere {
 	case 1:
-		return unhealthy
+		return constants.Unhealthy
 	case 2:
-		return degraded
+		return constants.Degraded
 	case 3:
-		return healthy
+		return constants.Healthy
 	}
 	return "unknown"
 }

@@ -23,4 +23,10 @@ const (
 	PerformedHealthcheckResult = "performed_healthcheck_result"
 	// HealthAggregatorInFlight records the number of health checks which are currently in flight
 	HealthAggregatorInFlight = "health_aggregator_checks_in_flight"
+	// Unhealthy reprents the unhealthy state from the UW operational health endpoint spec
+	Unhealthy = "unhealthy"
+	// Healthy reprents the healthy state from the UW operational health endpoint spec
+	Healthy = "healthy"
+	// Degraded reprents the degraded state from the UW operational health endpoint spec
+	Degraded = "degraded"
 )

@@ -24,11 +24,13 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/handlers"
 	"github.com/utilitywarehouse/health-aggregator/internal/httpserver"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
+	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 var (
-	gitHash string // populated at compile time
+	gitHash           string // populated at compile time
+	statusPageBaseURL = "https://api.statuspage.io/v1"
 )
 
 func main() {
@@ -93,6 +95,18 @@ func main() {
 		EnvVar: "KUBECONFIG_FILEPATH",
 		Value:  "",
 	})
+	statusPageIOPageID := app.String(cli.StringOpt{
+		Name:   "statuspage-io-page-id",
+		Desc:   "The Page ID for the statuspage.io page for which health aggregator will update the state of components",
+		EnvVar: "STATUSPAGE_IO_PAGE_ID",
+		Value:  "",
+	})
+	statusPageIOAPIKey := app.String(cli.StringOpt{
+		Name:   "statuspage-io-api-key",
+		Desc:   "The API key for statuspage.io",
+		EnvVar: "STATUSPAGE_IO_API_KEY",
+		Value:  "",
+	})
 
 	app.Before = func() {
 		setLogger(logLevel)
@@ -122,9 +136,11 @@ func main() {
 
 		createIndex(mgoRepo)
 
+		// Make all required channels
 		errs := make(chan error, 10)
-		healthchecks := make(chan model.Service, 1000)
+		servicesToScrape := make(chan model.Service, 1000)
 		statusResponses := make(chan model.ServiceStatus, 1000)
+		statuspageIOComponents := make(chan model.Component, 1000)
 
 		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
 
@@ -134,20 +150,25 @@ func main() {
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
 		go httpserver.Start(server)
 
+		// Start the ops HTTP server
 		metrics := setupMetrics()
-
 		go initOpsHTTPServer(*opsPort, mgoSess, metrics)
 
-		c := checks.NewHealthChecker(kubeClient, metrics)
+		// Call the statuspage.io API to update the status of components that appear on the statuspageIOComponents chan
+		statusBoardUpdater := statuspage.NewStatusPageUpdater(statusPageBaseURL, *statusPageIOPageID, *statusPageIOAPIKey)
+		go statusBoardUpdater.UpdateComponentStatuses(statuspageIOComponents, errs)
 
+		// Schedule service health check scraping every X seconds and add services to scrape to the
+		// servicesToScrape channel
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
 				log.Infof("Scheduling healthchecks at %v", t)
-				db.GetHealthchecks(mgoRepo, healthchecks, errs, *restrictToNamespaces...)
+				db.GetHealthchecks(mgoRepo, servicesToScrape, errs, *restrictToNamespaces...)
 			}
 		}()
 
+		// Schedule deletion of older health checks every...
 		tidyTicker := time.NewTicker(60 * time.Minute)
 		go func() {
 			for t := range tidyTicker.C {
@@ -156,9 +177,15 @@ func main() {
 			}
 		}()
 
-		go c.DoHealthchecks(healthchecks, statusResponses, errs)
+		// Scrape health checks that appear on the servicesToScrape chan, send responses to the statusResponses
+		// chan, and send components that require updating on statuspage.io to the statuspageIOComponents chan
+		healthChecker := checks.NewHealthChecker(kubeClient, metrics)
+		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, statuspageIOComponents, errs)
+
+		// Insert health check reponses into mongo that appear on the statusResponses chan
 		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
 
+		// Log out any errors that appear on the errs chan
 		go func() {
 			for e := range errs {
 				log.Printf("ERROR: %v", e)
