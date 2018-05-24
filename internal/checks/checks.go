@@ -93,6 +93,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					if len(pods) == 0 {
 						errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
+						createUpdateStatusTask(svc, aggregatedState, statuspageIOUpdates)
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					}
