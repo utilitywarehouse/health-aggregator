@@ -97,7 +97,6 @@ func (u *Updater) SetComponentStatus(component model.Component) error {
 		return fmt.Errorf("received non-200 status code (%v) from statuspage.io", resp.StatusCode)
 	}
 	log.Debug("Successfully updated statuspage.io status")
-	log.Debugf("Response: %v\n", resp.Body)
 
 	return nil
 }
