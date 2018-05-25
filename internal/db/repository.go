@@ -98,7 +98,7 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan m
 			r.PreviousState = r.AggregatedState
 		} else {
 			r.StateSince = prevCheckResponse.StateSince
-			r.PreviousState = prevCheckResponse.AggregatedState
+			r.PreviousState = prevCheckResponse.PreviousState
 		}
 
 		err := collection.Insert(r)
