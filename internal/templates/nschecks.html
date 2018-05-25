@@ -43,6 +43,15 @@
             .podsummary {
                 display: inline-flex;
             }
+            .healthy {
+                background-color: #28a745;
+            }
+            .unhealthy {
+                background-color: #dc3545;
+            }
+            .degraded {
+                background-color: #ffc107;
+            }
         </style>
     </head>
     <body>
@@ -137,7 +146,7 @@
                                     {{if .Body}}
                                     {{if .Body.Checks}}
                                     {{range .Body.Checks}}
-                                    <dt>{{.Name}} <span class="badge badge-secondary" style="float:right">{{.Health}}</span></dt>
+                                    <dt>{{.Name}} <span class="badge badge-secondary {{.Health}}" style="float:right">{{.Health}}</span></dt>
                                     <div class="check-info">
                                         {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
                                         {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
