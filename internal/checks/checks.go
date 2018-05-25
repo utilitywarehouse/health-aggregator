@@ -128,7 +128,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 
 					// report how many of the running pods are unhealthy
 					var podsUnhealthyMsg string
-					if noOfUnavailablePods > 0 {
+					if int32(len(pods)-noOfUnavailablePods) > svc.Deployment.DesiredReplicas {
 						podsUnhealthyMsg = fmt.Sprintf("%v/%v pods failed health checks", noOfUnavailablePods, len(pods))
 					}
 
