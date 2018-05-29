@@ -16,7 +16,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
-	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -46,20 +45,21 @@ type Metrics struct {
 
 // HealthChecker contains the httpClient
 type HealthChecker struct {
+	baseURL   string
 	client    httpClient
-	k8sClient *kubernetes.Clientset
+	k8sClient kubernetes.Interface
 	metrics   Metrics
 }
 
 // NewHealthChecker returns a struct with an httpClient
-func NewHealthChecker(k8sClient *kubernetes.Clientset, metrics Metrics) HealthChecker {
+func NewHealthChecker(k8sClient kubernetes.Interface, metrics Metrics, baseURL string) HealthChecker {
 
-	return HealthChecker{client: client, k8sClient: k8sClient, metrics: metrics}
+	return HealthChecker{client: client, k8sClient: k8sClient, metrics: metrics, baseURL: baseURL}
 }
 
 // DoHealthchecks performs http requests to retrieve health check responses for Services on a channel of type Service.
 // Responses are sent to a channel of type model.ServiceStatus and any errors are sent to a channel of type error.
-func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, statuspageIOUpdates chan model.Component, errs chan error) {
+func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusResponses chan model.ServiceStatus, errs chan error) {
 	aggregatorCounterVec := c.metrics.Counters[constants.HealthAggregatorOutcome]
 	inFlightChecksGaugeVec := c.metrics.Gauges[constants.HealthAggregatorInFlight]
 
@@ -73,7 +73,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 				if svc.Deployment.DesiredReplicas > 0 {
 
 					log.Debugf("Trying pod health checks for %v...", svc.Name)
-					// Get the pods
+					// Get pods for the service
 					pods, err := c.getPodsForService(svc.Namespace, svc.Name)
 					if err != nil {
 						errText := fmt.Sprintf("cannot retrieve pods for service with name %s to perform healthcheck: %s", svc.Name, err.Error())
@@ -93,7 +93,6 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					if len(pods) == 0 {
 						errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
-						createUpdateStatusTask(svc, constants.Unhealthy, statuspageIOUpdates)
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 						continue
 					}
@@ -136,46 +135,24 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						createUpdateStatusTask(svc, constants.Unhealthy, statuspageIOUpdates)
 						continue
 					case podsFewerThanDesiredReplicasMsg != "":
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						createUpdateStatusTask(svc, constants.Unhealthy, statuspageIOUpdates)
 						continue
 					case podsUnhealthyMsg != "":
 						aggregatedState := mostSevereState(podHealthResponses)
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						createUpdateStatusTask(svc, aggregatedState, statuspageIOUpdates)
 						continue
 					default:
 						aggregatedState := mostSevereState(podHealthResponses)
 						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
-						createUpdateStatusTask(svc, aggregatedState, statuspageIOUpdates)
 					}
 				}
 				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 			}
 		}(healthchecks)
-	}
-}
-
-func createUpdateStatusTask(svc model.Service, status string, statuspageIOUpdates chan model.Component) {
-	// if desiredReplicas == 1 we do not have to aggregate health status and can update statuspage.io immediately
-	if svc.Deployment.DesiredReplicas == 1 {
-		// if there is no component id annotation, we do not attempt to update status
-		if svc.ComponentID != "" {
-			statuspageIOStatus, err := statuspage.MapUWStatusToStatuspageIOStatus(status)
-			if err != nil {
-				log.Error(errors.Wrap(err, "failed to update statuspage.io status"))
-				return
-			}
-			select {
-			case statuspageIOUpdates <- model.Component{ID: svc.ComponentID, Status: statuspageIOStatus}:
-			default:
-			}
-		}
 	}
 }
 
@@ -211,7 +188,14 @@ func (c *HealthChecker) getHealthCheckForPod(pod model.Pod, appPort string) (mod
 	podHealthResponse.StatusCode = 0
 	podHealthResponse.Name = pod.Name
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://%s:%s/__/health", pod.IP, appPort), nil)
+	var url string
+	if c.baseURL == "" {
+		url = fmt.Sprintf("http://%s:%s/__/health", pod.IP, appPort)
+	} else {
+		url = c.baseURL
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		podHealthResponse.Error = "error constructing healthcheck request"
 		return podHealthResponse, errors.New(podHealthResponse.Error + ": " + err.Error())

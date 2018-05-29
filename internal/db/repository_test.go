@@ -21,6 +21,7 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/helpers"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
+	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 )
 
 var (
@@ -453,6 +454,8 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 	servicesChan := make(chan model.ServiceStatus, 10)
 	errsChan := make(chan error, 10)
 
+	statusPageUpdater := statuspage.NewStatusPageUpdater("", "", "", false)
+
 	servicesChan <- check1
 	servicesChan <- check2
 	servicesChan <- check3
@@ -460,7 +463,7 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		InsertHealthcheckResponses(s.repo, servicesChan, errsChan)
+		InsertHealthcheckResponses(s.repo, servicesChan, statusPageUpdater, errsChan)
 		close(done)
 	}()
 

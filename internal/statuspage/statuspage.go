@@ -32,10 +32,11 @@ type httpClient interface {
 
 // Updater is a struct containing the page to be updated and an http client - to be used as a receiver
 type Updater struct {
-	StatusPageID      string
-	Client            httpClient
-	APIKey            string
-	StatusPageBaseURL string
+	StatusPageID        string
+	Client              httpClient
+	APIKey              string
+	StatusPageBaseURL   string
+	PerformUpdateStatus bool
 }
 
 const (
@@ -47,9 +48,9 @@ const (
 )
 
 // NewStatusPageUpdater returns a struct with the required information to update component statuses in statuspage.io
-func NewStatusPageUpdater(statusPageBaseURL string, statusPage string, apiKey string) Updater {
+func NewStatusPageUpdater(statusPageBaseURL string, statusPage string, apiKey string, updateStatuspageIO bool) Updater {
 
-	return Updater{StatusPageBaseURL: statusPageBaseURL, StatusPageID: statusPage, APIKey: apiKey, Client: client}
+	return Updater{StatusPageBaseURL: statusPageBaseURL, StatusPageID: statusPage, APIKey: apiKey, Client: client, PerformUpdateStatus: updateStatuspageIO}
 }
 
 // MapUWStatusToStatuspageIOStatus maps any valid UW health status to the corresponding statuspage.io status

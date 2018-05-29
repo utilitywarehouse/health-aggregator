@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
+	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 )
 
 // K8sServicesConfigUpdater is a receiver object allowing UpsertServiceConfigs to be called
@@ -78,10 +79,17 @@ func (k K8sNamespacesConfigUpdater) UpsertNamespaceConfigs() {
 
 // InsertHealthcheckResponses inserts health check responses picked from a channel of type ServiceStatus, sending any
 // errors to a channel of type error
-func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error) {
+func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, statuspageUpdater statuspage.Updater, errs chan error) {
 
 	repoCopy := mgoRepo.WithNewSession()
 	defer repoCopy.Close()
+
+	statuspageIOComponents := make(chan model.Component, 1000)
+	if statuspageUpdater.PerformUpdateStatus {
+		// Call the statuspage.io API to update the status of components that appear on the statuspageIOComponents chan
+		go statuspageUpdater.UpdateComponentStatuses(statuspageIOComponents, errs)
+	}
+
 	for r := range statusResponses {
 
 		collection := repoCopy.Db().C(constants.HealthchecksCollection)
@@ -99,6 +107,10 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan m
 		} else {
 			r.StateSince = prevCheckResponse.StateSince
 			r.PreviousState = prevCheckResponse.PreviousState
+		}
+
+		if statuspageUpdater.PerformUpdateStatus {
+			createUpdateStatusTask(r.Service, r.AggregatedState, statuspageIOComponents)
 		}
 
 		err := collection.Insert(r)
@@ -261,5 +273,23 @@ func RemoveOlderThan(removeAfterDays int, mgoRepo *MongoRepository, errs chan er
 		default:
 		}
 		return
+	}
+}
+
+func createUpdateStatusTask(svc model.Service, status string, statuspageIOUpdates chan model.Component) {
+	// if desiredReplicas == 1 we do not have to aggregate health status and can update statuspage.io immediately
+	if svc.Deployment.DesiredReplicas == 1 {
+		// if there is no component id annotation, we do not attempt to update status
+		if svc.ComponentID != "" {
+			statuspageIOStatus, err := statuspage.MapUWStatusToStatuspageIOStatus(status)
+			if err != nil {
+				log.Error(errors.Wrap(err, "failed to update statuspage.io status"))
+				return
+			}
+			select {
+			case statuspageIOUpdates <- model.Component{ID: svc.ComponentID, Status: statuspageIOStatus}:
+			default:
+			}
+		}
 	}
 }

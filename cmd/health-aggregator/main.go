@@ -107,6 +107,12 @@ func main() {
 		EnvVar: "STATUSPAGE_IO_API_KEY",
 		Value:  "",
 	})
+	updateStatuspageIO := app.Bool(cli.BoolOpt{
+		Name:   "update-statuspage-io",
+		Desc:   "Set to true in order to perform updates to statuspage.io components",
+		EnvVar: "UPDATE_STATUSPAGE_IO",
+		Value:  false,
+	})
 
 	app.Before = func() {
 		setLogger(logLevel)
@@ -140,7 +146,6 @@ func main() {
 		errs := make(chan error, 10)
 		servicesToScrape := make(chan model.Service, 1000)
 		statusResponses := make(chan model.ServiceStatus, 1000)
-		statuspageIOComponents := make(chan model.Component, 1000)
 
 		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
 
@@ -153,10 +158,6 @@ func main() {
 		// Start the ops HTTP server
 		metrics := setupMetrics()
 		go initOpsHTTPServer(*opsPort, mgoSess, metrics)
-
-		// Call the statuspage.io API to update the status of components that appear on the statuspageIOComponents chan
-		statusBoardUpdater := statuspage.NewStatusPageUpdater(statusPageBaseURL, *statusPageIOPageID, *statusPageIOAPIKey)
-		go statusBoardUpdater.UpdateComponentStatuses(statuspageIOComponents, errs)
 
 		// Schedule service health check scraping every X seconds and add services to scrape to the
 		// servicesToScrape channel
@@ -178,12 +179,14 @@ func main() {
 		}()
 
 		// Scrape health checks that appear on the servicesToScrape chan, send responses to the statusResponses
-		// chan, and send components that require updating on statuspage.io to the statuspageIOComponents chan
-		healthChecker := checks.NewHealthChecker(kubeClient, metrics)
-		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, statuspageIOComponents, errs)
+		// chan
+		healthChecker := checks.NewHealthChecker(kubeClient, metrics, "")
+		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
-		// Insert health check reponses into mongo that appear on the statusResponses chan
-		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
+		statusPageUpdater := statuspage.NewStatusPageUpdater(statusPageBaseURL, *statusPageIOPageID, *statusPageIOAPIKey, *updateStatuspageIO)
+		// Insert health check reponses into mongo that appear on the statusResponses chan, and send
+		// components that require updating on statuspage.io to the statuspageIOComponents chan
+		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, statusPageUpdater, errs)
 
 		// Log out any errors that appear on the errs chan
 		go func() {

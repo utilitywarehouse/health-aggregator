@@ -86,6 +86,38 @@ func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNam
 	return healthCheck
 }
 
+// GenerateDummyServiceForNamespace generates a dummy service for a given namespace and sets the
+// desired replicas for the Deployment
+func GenerateDummyServiceForNamespace(namespace string, numReplicas int) model.Service {
+
+	svc := generateDummyService(numReplicas)
+
+	svc.Namespace = namespace
+
+	return svc
+}
+
+func generateDummyService(numReplicas int) model.Service {
+
+	namespaceName := String(10)
+	serviceName := String(10)
+
+	var svc model.Service
+	svc.Name = serviceName
+	svc.Namespace = namespaceName
+	svc.HealthcheckURL = fmt.Sprintf("http://%s.%s/__/health", namespaceName, serviceName)
+	svc.HealthAnnotations.EnableScrape = "true"
+	svc.HealthAnnotations.Port = "3000"
+	svc.AppPort = "8080"
+
+	var deployInfo model.DeployInfo
+	deployInfo.DesiredReplicas = int32(numReplicas)
+
+	svc.Deployment = deployInfo
+
+	return svc
+}
+
 func generateDummyPodHealthResponse(podName string, state ...string) model.PodHealthResponse {
 	var podHealthResponse model.PodHealthResponse
 	podHealthResponse.Name = podName
