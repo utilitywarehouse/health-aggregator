@@ -99,11 +99,6 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 			if _, exists := deployments[svc.Name]; !exists {
 				log.Errorf("cannot find deployment for service with name %s", svc.Name)
 				continue
-			} else {
-				if deployments[svc.Name].DesiredReplicas < 1 {
-					log.Debugf("Not adding service %v namespace %v as desired replicas set to %v", svc.Name, n.Name, deployments[svc.Name].DesiredReplicas)
-					continue
-				}
 			}
 
 			serviceAnnotations, err := getHealthAnnotations(svc)
