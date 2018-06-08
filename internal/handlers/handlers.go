@@ -200,6 +200,14 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 			checkData.Namespace = n
 			checkData.Checks = checks
 
+			zoom, ok := r.URL.Query()["zoom"]
+
+			if !ok || len(zoom) < 1 {
+				checkData.Zoom = "1.0"
+			} else {
+				checkData.Zoom = zoom[0]
+			}
+
 			if len(checks) == 0 {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(200)

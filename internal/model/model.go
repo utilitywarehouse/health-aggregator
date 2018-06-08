@@ -85,6 +85,7 @@ type Check struct {
 // TemplatedChecks wraps a list of HealthcheckResp for rendering in an html template
 type TemplatedChecks struct {
 	Namespace string
+	Zoom      string
 	Checks    []ServiceStatus
 }
 
