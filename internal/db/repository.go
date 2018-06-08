@@ -212,8 +212,8 @@ func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.S
 	pipeline := []bson.M{
 		{"$match": bson.M{"service.namespace": n}},
 		{"$sort": bson.M{"checkTime": -1}},
-		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$push": "$$ROOT"}}},
-		{"$replaceRoot": bson.M{"newRoot": bson.M{"$arrayElemAt": []interface{}{"$checks", 0}}}}}
+		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$first": "$$ROOT"}}},
+		{"$replaceRoot": bson.M{"newRoot": "$checks"}}}
 
 	pipe := collection.Pipe(pipeline).AllowDiskUse()
 
