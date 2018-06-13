@@ -86,6 +86,7 @@ type Check struct {
 type TemplatedChecks struct {
 	Namespace string
 	Zoom      string
+	BigScreen bool
 	Checks    []ServiceStatus
 }
 

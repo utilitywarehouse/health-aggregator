@@ -208,13 +208,23 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 				checkData.Zoom = zoom[0]
 			}
 
+			bigScreen, ok := r.URL.Query()["bigscreen"]
+
+			if !ok || len(bigScreen) < 1 {
+				checkData.BigScreen = false
+			} else {
+				if bigScreen[0] == "true" {
+					checkData.BigScreen = true
+				}
+			}
+
 			if len(checks) == 0 {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(200)
 				fmt.Fprint(w, "No checks available")
 				return
 			}
-			tmpl, tmplErr := template.ParseFiles("/templates/nschecks.html")
+			tmpl, tmplErr := template.ParseFiles("internal/templates/nschecks.html")
 			if tmplErr != nil {
 				log.WithError(errors.Wrap(tmplErr, "failed to parse template")).Error()
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
