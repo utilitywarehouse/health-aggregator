@@ -198,7 +198,6 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 		} else {
 			var checkData model.TemplatedChecks
 			checkData.Namespace = n
-			checkData.Checks = checks
 
 			zoom, ok := r.URL.Query()["zoom"]
 
@@ -218,12 +217,6 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 				}
 			}
 
-			if len(checks) == 0 {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(200)
-				fmt.Fprint(w, "No checks available")
-				return
-			}
 			tmpl, tmplErr := template.ParseFiles("internal/templates/nschecks.html")
 			if tmplErr != nil {
 				log.WithError(errors.Wrap(tmplErr, "failed to parse template")).Error()

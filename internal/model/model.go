@@ -87,7 +87,6 @@ type TemplatedChecks struct {
 	Namespace string
 	Zoom      string
 	BigScreen bool
-	Checks    []ServiceStatus
 }
 
 // Component is a statuspage.io object

@@ -1,0 +1,205 @@
+<html>
+    <head>
+        <meta http-equiv="refresh" content="60"/>
+        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+        <script src="https://use.fontawesome.com/2390d22bcf.js"></script>
+        <script>
+            $(function () {
+                $('[data-toggle="tooltip"]').tooltip()
+            })
+        </script>
+        <style>
+            .check-info {
+                font-size: 0.8em;
+                padding-bottom: 10px;
+                padding-top: 5px;
+                display: inline-block;
+            }
+            .chklabel {
+                width: 50px;
+                font-weight: bold;
+                display: inline-block;
+            }
+            .chkvalue {
+                display: inline;
+            }
+            .chkfield {
+                padding-left: 4px;
+            }
+            .chkcolumn {
+                min-width: 350px;
+                width: 25%;
+            }
+            {{if eq .BigScreen true}}
+            .chkcolumn.bigscreen {
+                width: 33.3% !important;
+            }
+            {{end}}
+            details summary::-webkit-details-marker {
+                font-size:0;
+            }
+            details summary:after {
+                content: '\f078';
+                font-family: FontAwesome;
+                padding-left: 10px;
+                color: black;
+            }
+            .podsummary {
+                display: inline-flex;
+            }
+            .healthy {
+                background-color: #28a745;
+            }
+            .unhealthy {
+                background-color: #dc3545;
+            }
+            .degraded {
+                background-color: #ffc107;
+            }
+            {{if eq .BigScreen true}}
+            button.bigscreen {
+                font-size: 1.7em;
+            }
+            i.bigscreen {
+                font-size: 1.7em;
+            }
+            {{end}}
+        </style>
+    </head>
+    <body style="zoom: {{.Zoom}}">
+        <div class="container-fluid d-flex flex-wrap" style="padding:0px !important;">
+            {{range .Checks}}
+            <div id="accordion-{{.Service.Name}}" class="chkcolumn m-0 bigscreen">
+                {{if eq .AggregatedState "healthy"}}
+                <div class="card border-success m-1">
+                <!-- if eq .AggregatedState "healthy" -->
+                {{end}}
+                {{if eq .AggregatedState "unhealthy"}}
+                <div class="card border-danger m-1">
+                <!-- if eq .AggregatedState "unhealthy" -->
+                {{end}}
+                {{if eq .AggregatedState "degraded"}}
+                <div class="card border-warning m-1">
+                <!-- if eq .AggregatedState "degraded" -->
+                {{end}}
+                    {{if eq .AggregatedState "healthy"}}
+                    <div class="card-header bg-success border-success" id="heading-{{.Service.Name}}">
+                        <h5 class="m-0">
+                            <button class="btn btn-link text-white pl-0 pr-0 bigscreen" style="overflow: hidden;text-overflow: ellipsis;max-width: 90%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
+                                {{.Service.Name}}
+                            </button>
+                            <i class="fa fa-check text-white bigscreen" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "healthy" -->
+                    {{end}}
+                    {{if eq .AggregatedState "unhealthy"}}
+                    <div class="card-header bg-danger border-danger" id="heading-{{.Service.Name}}">
+                        <h5 class="m-0">
+                            <button class="btn btn-link text-white pl-0 pr-0 bigscreen" style="overflow: hidden;text-overflow: ellipsis;max-width: 90%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
+                                {{.Service.Name}}
+                            </button>
+                            <i class="fa fa-times text-white bigscreen" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "unhealthy" -->
+                    {{end}}
+                    {{if eq .AggregatedState "degraded"}}
+                    <div class="card-header bg-warning border-warning" id="heading-{{.Service.Name}}">
+                        <h5 class="m-0">
+                                <button class="btn btn-link text-white pl-0 pr-0 bigscreen" style="overflow: hidden;text-overflow: ellipsis;max-width: 90%;" data-toggle="collapse" data-target="#collapse-{{.Service.Name}}" aria-expanded="true" aria-controls="collapse-{{.Service.Name}}">
+                                    {{.Service.Name}} <i class="fa fa-times" aria-hidden="true"></i>
+                                </button>
+                                <i class="fa fa-exclamation-triangle text-white bigscreen" style="float: right;line-height: 1.8;" aria-hidden="true"></i>
+                    <!-- if eq .AggregatedState "degraded" -->
+                    {{end}}
+                        </h5>
+                    </div>
+        
+                    <div id="collapse-{{.Service.Name}}" class="collapse" aria-labelledby="heading-{{.Service.Name}}" data-parent="#accordion-{{.Service.Name}}">
+                        <div class="card-body">
+                            <dt>State</dt>
+                            <dd>{{.AggregatedState}}</dd>
+                            {{if ne .AggregatedState "healthy"}}
+                            {{if .Error}}
+                            <dt>Error</dt>
+                            <samp style="font-size:0.8em">{{.Error}}</samp>
+                            {{end}}
+                            <!-- if ne .AggregatedState "healthy" -->
+                            {{end}}
+                            <hr>
+                            {{if .PodChecks}}
+                            <dt>Checks</dt>
+                                {{range .PodChecks}}
+                                <details>
+                                    {{if eq .State "healthy"}}
+                                    <summary class="text-success podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    {{if eq .State "unhealthy"}}
+                                    <summary class="text-danger podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    {{if eq .State "degraded"}}
+                                    <summary class="text-warning podsummary" style="padding-bottom: 10px;font-weight: bold;">{{.Name}}</summary>
+                                    {{end}}
+                                    <p><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></p>
+                                    <div style="display:flex;">
+                                            <div style="width:50%;">
+                                            <dt>State</dt>
+                                            <dd>{{.State}}</dd>
+                                        </div>
+                                        <div style="width:50%;">
+                                            {{if ne .StatusCode 0}}
+                                            <dt>Status Code</dt>
+                                            <dd>{{.StatusCode}}</dd>
+                                            {{end}}
+                                        </div>
+                                    </div>
+                                    {{if .Error}}
+                                    <dt>Error</dt>
+                                    <samp style="font-size:0.8em">{{.Error}}</samp>
+                                    {{end}}
+                                    <hr>
+                                    {{if .Body}}
+                                    {{if .Body.Checks}}
+                                    {{range .Body.Checks}}
+                                    <dt>{{.Name}} <span class="badge badge-secondary {{.Health}}" style="float:right">{{.Health}}</span></dt>
+                                    <div class="check-info">
+                                        {{if .Output}}<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">{{.Output}}</div></div>{{end}}
+                                        {{if .Action}}<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">{{.Action}}</div></div>{{end}}
+                                        {{if .Impact}}<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">{{.Impact}}</div></div>{{end}}
+                                    </div>
+                                    <!-- range .Body.Checks -->
+                                    {{end}}
+                                    <!-- if .Body.Checks -->
+                                    {{end}}
+                                    <!-- if .Body -->
+                                    {{end}}
+                                </details>
+                                
+                                
+                                <!-- range .PodChecks -->
+                                {{end}}
+                                <hr>
+                            <!-- if .PodChecks -->
+                            {{end}}
+                            <dt>Last Checked</dt>
+                            <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.CheckTime}}">{{.HumanisedCheckTime}}</a></dd>
+                            <div style="display:flex;">
+                                    <div style="width:50%;">
+                                    <dt>Entered State</dt>
+                                    <dd><a href="#" data-toggle="tooltip" data-placement="top" title="{{.StateSince}}">{{.HumanisedStateSince}}</a></dd>
+                                </div>
+                                <div style="width:50%;color:gray;">
+                                    <dt>Previous State</dt>
+                                    <dd>{{.PreviousState}}</dd>
+                                </div>
+                            </div>
+                            <a href="/namespaces/{{$.Namespace}}/services/{{.Service.Name}}/checks"class="btn btn-primary">History</a>
+                        </div>
+                    </div> <!-- end of collapse-{{.Service.Name}} -->
+                </div> <!-- end of card {{.Service.Name}} -->
+            </div> <!-- end of accordian {{.Service.Name}} -->
+            <!-- range .Checks -->
+            {{end}}
+        </div> <!-- end of container -->
+    </body>
+</html>
