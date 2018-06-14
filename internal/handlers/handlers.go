@@ -54,6 +54,7 @@ func NewRouter(mgoRepo *db.MongoRepository, kubeClient *kubernetes.Clientset) *m
 	r.Handle("/reload", withRepoCopy(mgoRepo, reloader.reload)).Methods(http.MethodPost)
 	r.Handle("/services", withRepoCopy(mgoRepo, getAllServices)).Methods(http.MethodGet)
 	r.Handle("/kube-ops/ready", yo()).Methods(http.MethodGet)
+	r.Handle("/", renderChecks()).Methods(http.MethodGet)
 	r.Handle("/namespaces", withRepoCopy(mgoRepo, getAllNamespaces)).Methods(http.MethodGet)
 	r.Handle("/namespaces/{namespace}/services", withRepoCopy(mgoRepo, getServicesForNameSpace)).Methods(http.MethodGet)
 	r.Handle("/namespaces/{namespace}/services/{service}/checks", withRepoCopy(mgoRepo, getAllChecksForService)).Methods(http.MethodGet)
@@ -108,6 +109,51 @@ func yo() http.Handler {
 		w.WriteHeader(200)
 		fmt.Fprint(w, "Yo!")
 		return
+	})
+}
+
+func renderChecks() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var checkData model.TemplatedChecks
+
+		ns, ok := r.URL.Query()["ns"]
+
+		if !ok || len(ns) < 1 {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(200)
+			fmt.Fprint(w, "Please enter a namespace in the 'ns' query string parameter")
+			return
+		} else {
+			checkData.Namespace = ns[0]
+		}
+
+		zoom, ok := r.URL.Query()["zoom"]
+
+		if !ok || len(zoom) < 1 {
+			checkData.Zoom = "1.0"
+		} else {
+			checkData.Zoom = zoom[0]
+		}
+
+		bigScreen, ok := r.URL.Query()["bigscreen"]
+
+		if !ok || len(bigScreen) < 1 {
+			checkData.BigScreen = false
+		} else {
+			if bigScreen[0] == "true" {
+				checkData.BigScreen = true
+			}
+		}
+
+		tmpl, tmplErr := template.ParseFiles("internal/templates/nschecks.html")
+		if tmplErr != nil {
+			log.WithError(errors.Wrap(tmplErr, "failed to parse template")).Error()
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(500)
+			fmt.Fprint(w, "Failed to parse template")
+			return
+		}
+		tmpl.Execute(w, checkData)
 	})
 }
 
@@ -190,43 +236,11 @@ func getLatestChecksForNamespace(mgoRepo *db.MongoRepository) http.HandlerFunc {
 
 		// Assign a numeric value for each state for later sorting and Humanise timestamps
 		enrichChecksData(checks)
+
 		// We want to see the failures at the top
 		sortByState(checks)
 
-		if r.Header.Get("Accept") == "application/json" {
-			responseWithJSON(w, http.StatusOK, checks)
-		} else {
-			var checkData model.TemplatedChecks
-			checkData.Namespace = n
-
-			zoom, ok := r.URL.Query()["zoom"]
-
-			if !ok || len(zoom) < 1 {
-				checkData.Zoom = "1.0"
-			} else {
-				checkData.Zoom = zoom[0]
-			}
-
-			bigScreen, ok := r.URL.Query()["bigscreen"]
-
-			if !ok || len(bigScreen) < 1 {
-				checkData.BigScreen = false
-			} else {
-				if bigScreen[0] == "true" {
-					checkData.BigScreen = true
-				}
-			}
-
-			tmpl, tmplErr := template.ParseFiles("internal/templates/nschecks.html")
-			if tmplErr != nil {
-				log.WithError(errors.Wrap(tmplErr, "failed to parse template")).Error()
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(500)
-				fmt.Fprint(w, "Failed to parse template")
-				return
-			}
-			tmpl.Execute(w, checkData)
-		}
+		responseWithJSON(w, http.StatusOK, checks)
 	}
 }
 
