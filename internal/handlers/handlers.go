@@ -123,9 +123,8 @@ func renderChecks() http.Handler {
 			w.WriteHeader(200)
 			fmt.Fprint(w, "Please enter a namespace in the 'ns' query string parameter")
 			return
-		} else {
-			checkData.Namespace = ns[0]
 		}
+		checkData.Namespace = ns[0]
 
 		zoom, ok := r.URL.Query()["zoom"]
 
