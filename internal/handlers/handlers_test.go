@@ -336,29 +336,6 @@ func Test_GetLatestChecksForNamespaceJSONReturnsEmptyListWhenNoneExist(t *testin
 	assert.Equal(t, len([]model.ServiceStatus{}), len(returnedChecks))
 	assert.Equal(t, "application/json; charset=utf-8", resp.Header().Get("Content-Type"))
 }
-
-func Test_GetLatestChecksForNamespaceHTMLReturnsMessageWhenNoneExist(t *testing.T) {
-	repoCopy := s.repo.WithNewSession()
-	defer repoCopy.Close()
-	ns := helpers.String(10)
-
-	resp := httptest.NewRecorder()
-	handler := http.HandlerFunc(getLatestChecksForNamespace(repoCopy))
-
-	req, reqErr := http.NewRequest(http.MethodGet, "/", nil)
-	require.NoError(t, reqErr)
-	req = mux.SetURLVars(req, map[string]string{"namespace": ns})
-
-	handler.ServeHTTP(resp, req)
-	assert.Equal(t, http.StatusOK, resp.Result().StatusCode)
-
-	body, readErr := ioutil.ReadAll(resp.Body)
-	require.NoError(t, readErr)
-
-	assert.Equal(t, body, []byte("No checks available"))
-	assert.Equal(t, resp.Header().Get("Content-Type"), "text/html; charset=utf-8")
-}
-
 func Test_GetLatestChecksForNamespaceJSON(t *testing.T) {
 	repoCopy := s.repo.WithNewSession()
 	defer repoCopy.Close()
