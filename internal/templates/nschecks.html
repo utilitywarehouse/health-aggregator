@@ -134,10 +134,12 @@
                             var showError = false;
                             
                             if (value.aggregatedState == 'healthy') {
+                                aggregatedState = 'healthy';
                                 bootstrapColour = "success";
                                 icon = 'fa-check';
                             }
                             if (value.aggregatedState == 'degraded') {
+                                aggregatedState = 'degraded';
                                 bootstrapColour = "warning";
                                 icon = 'fa-exclamation-triangle';
                             }
