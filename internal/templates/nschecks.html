@@ -63,208 +63,301 @@
                 font-size: 1.7em;
             }
             {{end}}
+            .corner-ribbon{
+                width: 200px;
+                z-index: 999;
+                background: #e43;
+                position: absolute;
+                top: 25px;
+                left: -50px;
+                text-align: center;
+                line-height: 50px;
+                font-size: 1.8em;
+                letter-spacing: 1px;
+                color: #f0f0f0;
+                transform: rotate(-45deg);
+                -webkit-transform: rotate(-45deg);
+            }
+
+            /* Custom styles */
+
+            .corner-ribbon.sticky{
+                position: fixed;
+            }
+
+            .corner-ribbon.shadow{
+                box-shadow: 0 0 3px rgba(0,0,0,.3);
+            }
+
+            .corner-ribbon.top-right{
+                top: 25px;
+                right: -50px;
+                left: auto;
+                transform: rotate(45deg);
+                -webkit-transform: rotate(45deg);
+            }
+
+            .corner-ribbon.blue{background: #39d;}
+            .corner-ribbon.red{background: #e43;}
+            #progressBar {
+                width: 100%;
+                margin: 0px auto;
+                height: 6px;
+                position: fixed;
+                bottom: 0;
+                background: white;
+                z-index: 99;
+            }
+
+            #progressBar div {
+                height: 4px;
+                text-align: right;
+                padding: 0 10px;
+                position: absolute;
+                bottom: 0;
+                width: 100%;
+                background-color:#39d;
+                box-sizing: border-box;
+            }
         </style>
-        <script type="text/javascript">
-        getData()
-        setInterval(getData, 60000);
-        function getParameterByName(name, url) {
-            if (!url) url = window.location.href;
-            name = name.replace(/[\[\]]/g, "\\$&");
-            var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
-                results = regex.exec(url);
-            if (!results) return null;
-            if (!results[2]) return '';
-            return decodeURIComponent(results[2].replace(/\+/g, " "));
-        }
-        function timeSince(timeStamp) {
-            var now = new Date(),
-                secondsPast = (now.getTime() - timeStamp.getTime() ) / 1000;
-            if(secondsPast < 60){
-                return parseInt(secondsPast) + 's';
-            }
-            if(secondsPast < 3600){
-                return parseInt(secondsPast/60) + 'm';
-            }
-            if(secondsPast <= 86400){
-                return parseInt(secondsPast/3600) + 'h';
-            }
-            if(secondsPast > 86400){
-                day = timeStamp.getDate();
-                month = timeStamp.toDateString().match(/ [a-zA-Z]*/)[0].replace(" ","");
-                year = timeStamp.getFullYear() == now.getFullYear() ? "" :  " "+timeStamp.getFullYear();
-                return day + " " + month + year;
-            }
-        }
-        function getData() {
-            var namespace = '{{.Namespace}}';
-            var env = getParameterByName('env');
-            if (env == "" || env == null) {
-                env = 'prod';
-            }
-            healthUrl = 'https://health-aggregator.'+env+'.uw.systems/namespaces/'+namespace+'/services/checks'
-            $.ajax({
-                      url: healthUrl,
-                      type: "GET",
-                      headers: {          
-                            Accept: "application/json"
-                        },
-                      cache: false,
-                      success: function(data){
-
-                        document.getElementById("checks-container").innerHTML = '';
-                        if (data.length == 0) {
-                            document.getElementById("checks-container").innerHTML = '';
-                            $('#checks-container').append('<div class="jumbotron jumbotron-fluid" style="width: 100%;top: 100px;position: absolute;">' +
-                                '<div class="container">' +
-                                '<h1 class="display-4">No checks found</h1>' +
-                                '<p class="lead">No checks available for namespace \''+namespace+'\' in environment \''+env+'\'</p>' +
-                                '</div>' +
-                                '</div>');
-                            return;
-                        }
-                        $.each(data , function(key, value){
-
-                            
-
-                            var bootstrapColour = 'danger';
-                            var serviceName = '';
-                            var aggregatedState = 'unhealthy';
-                            var desiredReplicas = '';
-                            var icon = 'fa-times';
-                            var showError = false;
-                            
-                            if (value.aggregatedState == 'healthy') {
-                                aggregatedState = 'healthy';
-                                bootstrapColour = "success";
-                                icon = 'fa-check';
-                            }
-                            if (value.aggregatedState == 'degraded') {
-                                aggregatedState = 'degraded';
-                                bootstrapColour = "warning";
-                                icon = 'fa-exclamation-triangle';
-                            }
-                            if (value.error != "") {
-                                showError = true;
-                            }
-
-                            serviceName = value.service.name;
-                            
-                            $('#checks-container').append('' +
-                            
-                            '<div id="accordion-' + serviceName + '" class="chkcolumn m-0 bigscreen">' +
-                            '<div class="card border-' + bootstrapColour + ' m-1">' +
-                            '<div class="card-header bg-'+bootstrapColour+' border-'+bootstrapColour+'" id="heading-'+serviceName+'">' +
-                            '<h5 class="m-0">' +
-                            '<button class="btn btn-link text-white pl-0 pr-0 bigscreen" style="overflow: hidden;text-overflow: ellipsis;max-width: 90%;" data-toggle="collapse" data-target="#collapse-'+serviceName+'" aria-expanded="true" aria-controls="collapse-'+serviceName+'">'+serviceName+'</button>' +
-                            '<i class="fa '+icon+' text-white bigscreen" style="float: right;line-height: 1.8;" aria-hidden="true"></i>');
-
-                            $('#checks-container div#accordion-'+serviceName+' div.card').append('' +
-                            
-                            '<div id="collapse-'+serviceName+'" class="collapse" aria-labelledby="heading-'+serviceName+'" data-parent="#accordion-'+serviceName+'">' +
-                            '<div class="card-body">' +
-                                '<dt>State</dt>' +
-                                '<dd>'+aggregatedState+'</dd>');
-                            
-                            if (showError) {
-                                $('#checks-container div#collapse-'+serviceName+' div.card-body').append('' + 
-
-                                '<dt>Error</dt>' +
-                                '<samp style="font-size:0.8em">'+value.error+'</samp>');
-                            }
-                            
-                            if (value.podChecks.length > 0) {
-                                $('#checks-container div#collapse-'+serviceName+' div.card-body').append('<hr><dt>Checks</dt>');
-                            }
-                            
-                            podChecks = '';
-                            $.each(value.podChecks , function(k , v){
-                            
-                            showPodError = false;
-
-                            if (v.error != "") {
-                                showPodError = true;
-                            }
-
-                            podChecks += '<details>' +
-                                    '<summary class="text-'+bootstrapColour+' podsummary" style="padding-bottom: 10px;font-weight: bold;">'+v.name+'</summary>' +
-                                        '<div style="display:flex;">' +
-                                                '<div style="width:50%;">' +
-                                                '<dt>State</dt>' +
-                                                '<dd>'+v.state+'</dd>' +
-                                            '</div>' +
-                                            '<div style="width:50%;">' +
-                                                '<dt>Status Code</dt>' +
-                                                '<dd>'+v.statusCode+'</dd>' +
-                                            '</div>' +
-                                        '</div>';
-                            if (showPodError) {
-                                podChecks += '<dt>Error</dt><samp style="font-size:0.8em">'+v.error+'</samp>';
-                            }
-
-                            podChecks += '<hr>';
-                            var checksInfo = '';
-                            if (v.body) {
-                                if (v.body.checks) {
-                                    
-                                    $.each(v.body.checks , function(key , val){
-                                        
-                                        checksInfo += '<dt>'+val.name+' <span class="badge badge-secondary '+val.health+'" style="float:right">'+val.health+'</span></dt>' +
-                                        '<div class="check-info">';
- 
-                                        if (val.output != "" && val.output != undefined) {
-                                            checksInfo += '<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">'+val.output+'</div></div>';
-                                        }
-                                        if (val.action != "" && val.action != undefined) {
-                                            checksInfo += '<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">'+val.action+'</div></div>';
-                                        }
-                                        if (val.impact != "" && val.impact != undefined) {
-                                            checksInfo += '<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">'+val.impact+'</div></div>';
-                                        }
-                                        checksInfo += '</div>';
-                                        
-                                    });                                    
-                                }
-                            }
-                            podChecks += checksInfo + '</details>';
-                            
-                            });
-                            $('#checks-container div#collapse-'+serviceName+' div.card-body').append(podChecks);
-
-                                $('#checks-container div#collapse-'+serviceName+' div.card-body').append('<dt>Last Checked</dt>' +
-                                '<dd><a href="#" data-toggle="tooltip" data-placement="top" title="'+value.checkTime+'">'+timeSince(new Date(value.checkTime))+'</a></dd>' +
-                                '<div style="display:flex;">' +
-                                        '<div style="width:50%;">' +
-                                        '<dt>Entered State</dt>' +
-                                        '<dd><a href="#" data-toggle="tooltip" data-placement="top" title="'+value.stateSince+'">'+timeSince(new Date(value.stateSince))+'</a></dd>' +
-                                    '</div>' +
-                                    '<div style="width:50%;color:gray;">' +
-                                        '<dt>Previous State</dt>' +
-                                        '<dd>'+value.previousState+'</dd>' +
-                                    '</div>' +
-                                '</div>' +
-                                '<a href="/namespaces/{{$.Namespace}}/services/'+serviceName+'/checks"class="btn btn-primary">History</a>' +
-                            '</div>' +
-                        '</div> <!-- end of collapse-'+serviceName+' -->');
-                            
-                        });
-                      },
-                      error: function(xhr, status, error){
-                        document.getElementById("checks-container").innerHTML = '';
-                        $('#checks-container').append('<div class="jumbotron jumbotron-fluid" style="width: 100%;top: 100px;position: absolute;">' +
-                            '<div class="container">' +
-                            '<h1 class="display-4">Unable to get health data!</h1>' +
-                            '<p class="lead">Error retrieving from '+healthUrl+'</p>' +
-                            '<p>Error: [ ' + xhr.responseText + ' ]</p>' +
-                            '</div>' +
-                            '</div>');
-                      }
-                      
-                    });
-        }
-        </script>
+        <script type = "text/javascript">
+            
+            function progress(timeleft, timetotal, $element) {
+                var progressBarWidth = timeleft * $element.width() / timetotal;
+                if (timeleft == 60) {
+                    $element.find('div').width('100%');
+                } else {
+                    $element.find('div').animate({ width: progressBarWidth }, 1000, "linear");
+                }
+                if(timeleft > 0) {
+                    setTimeout(function() {
+                        progress(timeleft - 1, timetotal, $element);
+                    
+                    }, 1000);
+                }
+            };
+            
+            </script>
     </head>
     <body style="zoom: {{.Zoom}}">
-        <div id="checks-container" class="container-fluid d-flex flex-wrap" style="padding:0px !important;">
+        <div id="progressBar">
+            <div class="bar"></div>
+        </div>
+        <div id="env-ribbon" class="corner-ribbon top-right sticky"></div>
+        <div id="checks-container" class="container-fluid d-flex flex-wrap" style="padding:0 !important;">
+
         </div>
     </body>
+    <footer>
+            <script type="text/javascript">
+                getData()
+                setInterval(getData, 60000);
+                function getParameterByName(name, url) {
+                    if (!url) url = window.location.href;
+                    name = name.replace(/[\[\]]/g, "\\$&");
+                    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+                        results = regex.exec(url);
+                    if (!results) return null;
+                    if (!results[2]) return '';
+                    return decodeURIComponent(results[2].replace(/\+/g, " "));
+                }
+                function timeSince(timeStamp) {
+                    var now = new Date(),
+                        secondsPast = (now.getTime() - timeStamp.getTime() ) / 1000;
+                    if(secondsPast < 60){
+                        return parseInt(secondsPast) + 's';
+                    }
+                    if(secondsPast < 3600){
+                        return parseInt(secondsPast/60) + 'm';
+                    }
+                    if(secondsPast <= 86400){
+                        return parseInt(secondsPast/3600) + 'h';
+                    }
+                    if(secondsPast > 86400){
+                        day = timeStamp.getDate();
+                        month = timeStamp.toDateString().match(/ [a-zA-Z]*/)[0].replace(" ","");
+                        year = timeStamp.getFullYear() == now.getFullYear() ? "" :  " "+timeStamp.getFullYear();
+                        return day + " " + month + year;
+                    }
+                }
+                function getData() {
+                    
+                    var namespace = '{{.Namespace}}';
+                    var env = getParameterByName('env');
+                    var ribbon = document.getElementById("env-ribbon");
+                    ribbon.innerHTML = env;
+                    if (env == 'prod') {
+                        ribbon.classList.add("red");
+                    } else {
+                        ribbon.classList.add("blue");
+                    }
+                    ribbon.classList.add("mystyle");
+                    if (env == "" || env == null) {
+                        env = 'prod';
+                    }
+                    healthUrl = 'https://health-aggregator.'+env+'.uw.systems/namespaces/'+namespace+'/services/checks'
+                    $.ajax({
+                              url: healthUrl,
+                              type: "GET",
+                              headers: {          
+                                    Accept: "application/json"
+                                },
+                              cache: false,
+                              success: function(data){
+        
+                                document.getElementById("checks-container").innerHTML = '';
+                                progress(60, 60, $('#progressBar'));
+                                if (data.length == 0) {
+                                    document.getElementById("checks-container").innerHTML = '';
+                                    progress(60, 60, $('#progressBar'));
+                                    $('#checks-container').append('<div class="jumbotron jumbotron-fluid" style="width: 100%;top: 100px;position: absolute;">' +
+                                        '<div class="container">' +
+                                        '<h1 class="display-4">No checks found</h1>' +
+                                        '<p class="lead">No checks available for namespace \''+namespace+'\' in environment \''+env+'\'</p>' +
+                                        '</div>' +
+                                        '</div>');
+                                    return;
+                                }
+                                $.each(data , function(key, value){
+        
+                                    
+        
+                                    var bootstrapColour = 'danger';
+                                    var serviceName = '';
+                                    var aggregatedState = 'unhealthy';
+                                    var desiredReplicas = '';
+                                    var icon = 'fa-times';
+                                    var showError = false;
+                                    
+                                    if (value.aggregatedState == 'healthy') {
+                                        aggregatedState = 'healthy';
+                                        bootstrapColour = "success";
+                                        icon = 'fa-check';
+                                    }
+                                    if (value.aggregatedState == 'degraded') {
+                                        aggregatedState = 'degraded';
+                                        bootstrapColour = "warning";
+                                        icon = 'fa-exclamation-triangle';
+                                    }
+                                    if (value.error != "") {
+                                        showError = true;
+                                    }
+        
+                                    serviceName = value.service.name;
+                                    
+                                    $('#checks-container').append('' +
+                                    
+                                    '<div id="accordion-' + serviceName + '" class="chkcolumn m-0 bigscreen">' +
+                                    '<div class="card border-' + bootstrapColour + ' m-1">' +
+                                    '<div class="card-header bg-'+bootstrapColour+' border-'+bootstrapColour+'" id="heading-'+serviceName+'">' +
+                                    '<h5 class="m-0">' +
+                                    '<button class="btn btn-link text-white pl-0 pr-0 bigscreen" style="overflow: hidden;text-overflow: ellipsis;max-width: 90%;" data-toggle="collapse" data-target="#collapse-'+serviceName+'" aria-expanded="true" aria-controls="collapse-'+serviceName+'">'+serviceName+'</button>' +
+                                    '<i class="fa '+icon+' text-white bigscreen" style="float: right;line-height: 1.8;" aria-hidden="true"></i>');
+        
+                                    $('#checks-container div#accordion-'+serviceName+' div.card').append('' +
+                                    
+                                    '<div id="collapse-'+serviceName+'" class="collapse" aria-labelledby="heading-'+serviceName+'" data-parent="#accordion-'+serviceName+'">' +
+                                    '<div class="card-body">' +
+                                        '<dt>State</dt>' +
+                                        '<dd>'+aggregatedState+'</dd>');
+                                    
+                                    if (showError) {
+                                        $('#checks-container div#collapse-'+serviceName+' div.card-body').append('' + 
+        
+                                        '<dt>Error</dt>' +
+                                        '<samp style="font-size:0.8em">'+value.error+'</samp>');
+                                    }
+                                    
+                                    if (value.podChecks.length > 0) {
+                                        $('#checks-container div#collapse-'+serviceName+' div.card-body').append('<hr><dt>Checks</dt>');
+                                    }
+                                    
+                                    podChecks = '';
+                                    $.each(value.podChecks , function(k , v){
+                                    
+                                    showPodError = false;
+        
+                                    if (v.error != "") {
+                                        showPodError = true;
+                                    }
+        
+                                    podChecks += '<details>' +
+                                            '<summary class="text-'+bootstrapColour+' podsummary" style="padding-bottom: 10px;font-weight: bold;">'+v.name+'</summary>' +
+                                                '<div style="display:flex;">' +
+                                                        '<div style="width:50%;">' +
+                                                        '<dt>State</dt>' +
+                                                        '<dd>'+v.state+'</dd>' +
+                                                    '</div>' +
+                                                    '<div style="width:50%;">' +
+                                                        '<dt>Status Code</dt>' +
+                                                        '<dd>'+v.statusCode+'</dd>' +
+                                                    '</div>' +
+                                                '</div>';
+                                    if (showPodError) {
+                                        podChecks += '<dt>Error</dt><samp style="font-size:0.8em">'+v.error+'</samp>';
+                                    }
+        
+                                    podChecks += '<hr>';
+                                    var checksInfo = '';
+                                    if (v.body) {
+                                        if (v.body.checks) {
+                                            
+                                            $.each(v.body.checks , function(key , val){
+                                                
+                                                checksInfo += '<dt>'+val.name+' <span class="badge badge-secondary '+val.health+'" style="float:right">'+val.health+'</span></dt>' +
+                                                '<div class="check-info">';
+         
+                                                if (val.output != "" && val.output != undefined) {
+                                                    checksInfo += '<div class="chkfield"><div class="chklabel">Output: </div><div class="chkvalue">'+val.output+'</div></div>';
+                                                }
+                                                if (val.action != "" && val.action != undefined) {
+                                                    checksInfo += '<div class="chkfield"><div class="chklabel">Action: </div><div class="chkvalue">'+val.action+'</div></div>';
+                                                }
+                                                if (val.impact != "" && val.impact != undefined) {
+                                                    checksInfo += '<div class="chkfield"><div class="chklabel">Impact: </div><div class="chkvalue">'+val.impact+'</div></div>';
+                                                }
+                                                checksInfo += '</div>';
+                                                
+                                            });                                    
+                                        }
+                                    }
+                                    podChecks += checksInfo + '</details>';
+                                    
+                                    });
+                                    $('#checks-container div#collapse-'+serviceName+' div.card-body').append(podChecks);
+        
+                                        $('#checks-container div#collapse-'+serviceName+' div.card-body').append('<dt>Last Checked</dt>' +
+                                        '<dd><a href="#" data-toggle="tooltip" data-placement="top" title="'+value.checkTime+'">'+timeSince(new Date(value.checkTime))+'</a></dd>' +
+                                        '<div style="display:flex;">' +
+                                                '<div style="width:50%;">' +
+                                                '<dt>Entered State</dt>' +
+                                                '<dd><a href="#" data-toggle="tooltip" data-placement="top" title="'+value.stateSince+'">'+timeSince(new Date(value.stateSince))+'</a></dd>' +
+                                            '</div>' +
+                                            '<div style="width:50%;color:gray;">' +
+                                                '<dt>Previous State</dt>' +
+                                                '<dd>'+value.previousState+'</dd>' +
+                                            '</div>' +
+                                        '</div>' +
+                                        '<a href="/namespaces/{{$.Namespace}}/services/'+serviceName+'/checks"class="btn btn-primary">History</a>' +
+                                    '</div>' +
+                                '</div> <!-- end of collapse-'+serviceName+' -->');
+                                    
+                                });
+                              },
+                              error: function(xhr, status, error){
+                                document.getElementById("checks-container").innerHTML = '';
+                                progress(60, 60, $('#progressBar'));
+                                $('#checks-container').append('<div class="jumbotron jumbotron-fluid" style="width: 100%;top: 100px;position: absolute;">' +
+                                    '<div class="container">' +
+                                    '<h1 class="display-4">Unable to get health data!</h1>' +
+                                    '<p class="lead">Error retrieving from '+healthUrl+'</p>' +
+                                    '<p>Error: [ ' + xhr.responseText + ' ]</p>' +
+                                    '</div>' +
+                                    '</div>');
+                              }
+                              
+                            });
+                }
+                </script>
+    </footer>
 </html>
