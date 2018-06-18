@@ -210,7 +210,7 @@ func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.S
 	collection := mgoRepo.Db().C(constants.HealthchecksCollection)
 
 	pipeline := []bson.M{
-		{"$match": bson.M{"service.namespace": n}},
+		{"$match": bson.M{"service.namespace": n, "service.deployment.desiredReplicas": bson.M{$gt: 0}}},
 		{"$sort": bson.M{"checkTime": -1}},
 		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$first": "$$ROOT"}}},
 		{"$replaceRoot": bson.M{"newRoot": "$checks"}}}
