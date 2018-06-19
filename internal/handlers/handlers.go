@@ -144,6 +144,16 @@ func renderChecks() http.Handler {
 			}
 		}
 
+		compact, ok := r.URL.Query()["compact"]
+
+		if !ok || len(compact) < 1 {
+			checkData.Compact = false
+		} else {
+			if compact[0] == "true" {
+				checkData.Compact = true
+			}
+		}
+
 		tmpl, tmplErr := template.ParseFiles("internal/templates/nschecks.html")
 		if tmplErr != nil {
 			log.WithError(errors.Wrap(tmplErr, "failed to parse template")).Error()

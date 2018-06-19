@@ -87,6 +87,7 @@ type TemplatedChecks struct {
 	Namespace string
 	Zoom      string
 	BigScreen bool
+	Compact   bool
 }
 
 // Component is a statuspage.io object
