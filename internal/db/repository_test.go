@@ -65,20 +65,18 @@ func Test_GetHealthchecks(t *testing.T) {
 	ns1Name := helpers.String(10)
 	ns2Name := helpers.String(10)
 
-	s1 := model.Service{Name: helpers.String(10),
-		Namespace:         ns1Name,
-		HealthAnnotations: defaultHealthAnnotations,
-	}
+	s1 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s1.HealthAnnotations = defaultHealthAnnotations
 
-	s2 := model.Service{Name: helpers.String(10),
-		Namespace:         ns1Name,
-		HealthAnnotations: noScrapeHealthAnnotations,
-	}
+	s2 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s2.HealthAnnotations = noScrapeHealthAnnotations
 
-	s3 := model.Service{Name: helpers.String(10),
-		Namespace:         ns2Name,
-		HealthAnnotations: diffPortHealthAnnotations,
-	}
+	s3 := helpers.GenerateDummyServiceForNamespace(ns2Name, 1)
+	s3.HealthAnnotations = diffPortHealthAnnotations
+
+	// this service has no replicas and should not be checked
+	s4 := helpers.GenerateDummyServiceForNamespace(ns1Name, 0)
+	s4.HealthAnnotations = defaultHealthAnnotations
 
 	insertItems(s.repo, s1, s2, s3)
 
@@ -147,30 +145,20 @@ func Test_FindAllServicesWithHealthScrapeEnabled(t *testing.T) {
 	ns3Name := helpers.String(10)
 	ns4Name := helpers.String(10)
 
-	s1 := model.Service{Name: helpers.String(10),
-		Namespace:         ns1Name,
-		HealthAnnotations: defaultHealthAnnotations,
-	}
+	s1 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s1.HealthAnnotations = defaultHealthAnnotations
 
-	s2 := model.Service{Name: helpers.String(10),
-		Namespace:         ns1Name,
-		HealthAnnotations: noScrapeHealthAnnotations,
-	}
+	s2 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s2.HealthAnnotations = noScrapeHealthAnnotations
 
-	s3 := model.Service{Name: helpers.String(10),
-		Namespace:         ns2Name,
-		HealthAnnotations: diffPortHealthAnnotations,
-	}
+	s3 := helpers.GenerateDummyServiceForNamespace(ns2Name, 1)
+	s3.HealthAnnotations = diffPortHealthAnnotations
 
-	s4 := model.Service{Name: helpers.String(10),
-		Namespace:         ns3Name,
-		HealthAnnotations: defaultHealthAnnotations,
-	}
+	s4 := helpers.GenerateDummyServiceForNamespace(ns3Name, 1)
+	s4.HealthAnnotations = defaultHealthAnnotations
 
-	s5 := model.Service{Name: helpers.String(10),
-		Namespace:         ns4Name,
-		HealthAnnotations: noScrapeHealthAnnotations,
-	}
+	s5 := helpers.GenerateDummyServiceForNamespace(ns4Name, 1)
+	s5.HealthAnnotations = noScrapeHealthAnnotations
 
 	insertItems(s.repo, s1, s2, s3, s4, s5)
 

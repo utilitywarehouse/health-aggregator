@@ -86,6 +86,37 @@ func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNam
 	return healthCheck
 }
 
+// GenerateDummyServiceStatusForService generates a dummy healthcheck response (model.HealthcheckResp) with either random
+// state (healthy/unhealthy/degraded) or with the provided state string
+func GenerateDummyServiceStatusForService(service model.Service, namespaceName string, podNames []string, state ...string) model.ServiceStatus {
+	var healthCheck model.ServiceStatus
+
+	healthCheck.Service = service
+
+	// CheckTime
+	healthCheck.CheckTime = time.Now().UTC()
+
+	// PodChecks
+	var podChecks []model.PodHealthResponse
+	for _, podName := range podNames {
+		var podHealthResponse model.PodHealthResponse
+		podHealthResponse = generateDummyPodHealthResponse(podName, state...)
+		podChecks = append(podChecks, podHealthResponse)
+	}
+	healthCheck.PodChecks = podChecks
+
+	// Aggregated state
+	if len(state) == 1 {
+		healthCheck.AggregatedState = state[0]
+	} else {
+		healthCheck.AggregatedState = "unhealthy"
+	}
+
+	healthCheck.Error = String(10)
+
+	return healthCheck
+}
+
 // GenerateDummyServiceForNamespace generates a dummy service for a given namespace and sets the
 // desired replicas for the Deployment
 func GenerateDummyServiceForNamespace(namespace string, numReplicas int) model.Service {

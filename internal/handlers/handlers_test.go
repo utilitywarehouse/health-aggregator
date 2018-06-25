@@ -343,24 +343,30 @@ func Test_GetLatestChecksForNamespaceJSON(t *testing.T) {
 	// Generate some service and namespace names
 	ns1Name := helpers.String(10)
 	ns2Name := helpers.String(10)
-	s1Name := helpers.String(10)
-	s2Name := helpers.String(10)
 
 	s1Pods := []string{"s1Pod1", "s1Pod2"}
 	s2Pods := []string{"s2Pod1", "s2Pod2"}
 
+	// Create service configs
+	ns1s1 := helpers.GenerateDummyServiceForNamespace(ns1Name, 2)
+	ns1s2 := helpers.GenerateDummyServiceForNamespace(ns1Name, 2)
+	ns2s1 := helpers.GenerateDummyServiceForNamespace(ns2Name, 2)
+	ns2s1.Name = ns1s1.Name
+
+	dbutils.InsertItems(repoCopy, ns1s1, ns1s2, ns2s1)
+
 	// Create checks for a single service in a specific namespace
-	chk1 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
+	chk1 := helpers.GenerateDummyServiceStatusForService(ns1s1, ns1Name, s1Pods)
 	time.Sleep(time.Millisecond * 200)
-	chk2 := helpers.GenerateDummyServiceStatus(s1Name, ns1Name, s1Pods)
+	chk2 := helpers.GenerateDummyServiceStatusForService(ns1s1, ns1Name, s1Pods)
 
 	// Create checks against a different service in the same namespace
-	chk3 := helpers.GenerateDummyServiceStatus(s2Name, ns1Name, s2Pods)
+	chk3 := helpers.GenerateDummyServiceStatusForService(ns1s2, ns1Name, s2Pods)
 	time.Sleep(time.Millisecond * 200)
-	chk4 := helpers.GenerateDummyServiceStatus(s2Name, ns1Name, s2Pods)
+	chk4 := helpers.GenerateDummyServiceStatusForService(ns1s2, ns1Name, s2Pods)
 
 	// Create a check against a service with the same name, but within a different namespace
-	chk5 := helpers.GenerateDummyServiceStatus(s1Name, ns2Name, s1Pods)
+	chk5 := helpers.GenerateDummyServiceStatusForService(ns2s1, ns2Name, s1Pods)
 	dbutils.InsertItems(repoCopy, chk1, chk2, chk3, chk4, chk5)
 
 	// We only expect the LATEST checks to be returned, and only the ones for this namespace
@@ -387,7 +393,6 @@ func Test_GetLatestChecksForNamespaceJSON(t *testing.T) {
 	if jsonErr != nil {
 		require.NoError(t, jsonErr)
 	}
-
 	assertEqual(t, expectedHealthChecks, returnedHealthChecks)
 }
 

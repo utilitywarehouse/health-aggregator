@@ -174,7 +174,7 @@ func FindAllServicesWithHealthScrapeEnabled(mgoRepo *MongoRepository, restrictTo
 	collection := mgoRepo.Db().C(constants.ServicesCollection)
 	svcs := []model.Service{}
 	if len(restrictToNamespace) > 0 {
-		if err := collection.Find(bson.M{"namespace": bson.M{"$in": restrictToNamespace}, "healthAnnotations.enableScrape": "true"}).Sort("namespace").All(&svcs); err != nil {
+		if err := collection.Find(bson.M{"namespace": bson.M{"$in": restrictToNamespace}, "healthAnnotations.enableScrape": "true", "deployment.desiredReplicas": bson.M{"$gt": 0}}).Sort("namespace").All(&svcs); err != nil {
 			return nil, errors.Wrap(err, "failed to get all service healthcheck endpoints with scrape enabled")
 		}
 		return svcs, nil
@@ -207,10 +207,21 @@ func FindAllChecksForService(mgoRepo *MongoRepository, n string, s string) ([]mo
 // FindLatestChecksForNamespace returns the latest ServiceStatus for all services in a given Namespace Name
 func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.ServiceStatus, error) {
 
+	var servicesToReturn []model.Service
+	servicesToReturn, err := FindAllServicesWithHealthScrapeEnabled(mgoRepo, n)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get checks, err: %v", err)
+	}
+
+	var serviceNamesToReturn []string
+	for _, svc := range servicesToReturn {
+		serviceNamesToReturn = append(serviceNamesToReturn, svc.Name)
+	}
+	fmt.Println(serviceNamesToReturn)
 	collection := mgoRepo.Db().C(constants.HealthchecksCollection)
 
 	pipeline := []bson.M{
-		{"$match": bson.M{"service.namespace": n, "service.deployment.desiredReplicas": bson.M{"$gt": 0}}},
+		{"$match": bson.M{"service.name": bson.M{"$in": serviceNamesToReturn}, "service.namespace": n, "service.deployment.desiredReplicas": bson.M{"$gt": 0}}},
 		{"$sort": bson.M{"checkTime": -1}},
 		{"$group": bson.M{"_id": "$service.name", "checks": bson.M{"$first": "$$ROOT"}}},
 		{"$replaceRoot": bson.M{"newRoot": "$checks"}}}
@@ -218,15 +229,13 @@ func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.S
 	pipe := collection.Pipe(pipeline).AllowDiskUse()
 
 	var checks []model.ServiceStatus
-	err := pipe.All(&checks)
-	if err != nil {
+	if err := pipe.All(&checks); err != nil {
 		return nil, fmt.Errorf("failed to get all healthcheck responses for service within namespace %v err: %v", n, err)
 	}
 
 	if checks == nil {
 		checks = []model.ServiceStatus{}
 	}
-
 	return checks, nil
 }
 

@@ -70,85 +70,83 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 				inFlightChecksGaugeVec.With(map[string]string{}).Inc()
 
 				serviceCheckTime := time.Now().UTC()
-				if svc.Deployment.DesiredReplicas > 0 {
 
-					log.Debugf("Trying pod health checks for %v...", svc.Name)
-					// Get pods for the service
-					pods, err := c.getPodsForService(svc.Namespace, svc.Name)
-					if err != nil {
-						errText := fmt.Sprintf("cannot retrieve pods for service with name %s to perform healthcheck: %s", svc.Name, err.Error())
-						select {
-						case errs <- fmt.Errorf(errText):
-						default:
-						}
-						select {
-						case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: constants.Unhealthy, Error: errText}:
-						default:
-						}
-						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						continue
-					}
-
-					// no pods are running - no point scraping the health endpoints
-					if len(pods) == 0 {
-						errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
-						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						continue
-					}
-
-					noOfUnavailablePods := 0
-
-					var podHealthResponses []model.PodHealthResponse
-					for _, pod := range pods {
-						var podHealthResponse model.PodHealthResponse
-
-						podHealthResponse, err := c.getHealthCheckForPod(pod, svc.AppPort)
-						if err != nil {
-							if aggregatorCounterVec != nil {
-								aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "failure"}).Inc()
-							}
-							noOfUnavailablePods++
-							log.Debugf("pod %v (service %v) health check returned an error: %v", pod.Name, pod.ServiceName, err.Error())
-						} else {
-							if aggregatorCounterVec != nil {
-								aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "success"}).Inc()
-							}
-						}
-
-						podHealthResponses = append(podHealthResponses, podHealthResponse)
-					}
-
-					// report if there are fewer running pods than desired replicas
-					var podsFewerThanDesiredReplicasMsg string
-					if svc.Deployment.DesiredReplicas > int32(len(pods)) {
-						podsFewerThanDesiredReplicasMsg = fmt.Sprintf("there are %v fewer running pods (%v) than the number of desired replicas (%v)", (svc.Deployment.DesiredReplicas - int32(len(pods))), len(pods), svc.Deployment.DesiredReplicas)
-					}
-
-					// report how many of the running pods are unhealthy
-					var podsUnhealthyMsg string
-					if int32(len(pods)-noOfUnavailablePods) > svc.Deployment.DesiredReplicas {
-						podsUnhealthyMsg = fmt.Sprintf("%v/%v pods failed health checks", noOfUnavailablePods, len(pods))
-					}
-
-					switch {
-					case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
-						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						continue
-					case podsFewerThanDesiredReplicasMsg != "":
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
-						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						continue
-					case podsUnhealthyMsg != "":
-						aggregatedState := mostSevereState(podHealthResponses)
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
-						inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-						continue
+				log.Debugf("Trying pod health checks for %v...", svc.Name)
+				// Get pods for the service
+				pods, err := c.getPodsForService(svc.Namespace, svc.Name)
+				if err != nil {
+					errText := fmt.Sprintf("cannot retrieve pods for service with name %s to perform healthcheck: %s", svc.Name, err.Error())
+					select {
+					case errs <- fmt.Errorf(errText):
 					default:
-						aggregatedState := mostSevereState(podHealthResponses)
-						statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 					}
+					select {
+					case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: constants.Unhealthy, Error: errText}:
+					default:
+					}
+					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+					continue
+				}
+
+				// no pods are running - no point scraping the health endpoints
+				if len(pods) == 0 {
+					errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
+					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+					continue
+				}
+
+				noOfUnavailablePods := 0
+
+				var podHealthResponses []model.PodHealthResponse
+				for _, pod := range pods {
+					var podHealthResponse model.PodHealthResponse
+
+					podHealthResponse, err := c.getHealthCheckForPod(pod, svc.AppPort)
+					if err != nil {
+						if aggregatorCounterVec != nil {
+							aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "failure"}).Inc()
+						}
+						noOfUnavailablePods++
+						log.Debugf("pod %v (service %v) health check returned an error: %v", pod.Name, pod.ServiceName, err.Error())
+					} else {
+						if aggregatorCounterVec != nil {
+							aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "success"}).Inc()
+						}
+					}
+
+					podHealthResponses = append(podHealthResponses, podHealthResponse)
+				}
+
+				// report if there are fewer running pods than desired replicas
+				var podsFewerThanDesiredReplicasMsg string
+				if svc.Deployment.DesiredReplicas > int32(len(pods)) {
+					podsFewerThanDesiredReplicasMsg = fmt.Sprintf("there are %v fewer running pods (%v) than the number of desired replicas (%v)", (svc.Deployment.DesiredReplicas - int32(len(pods))), len(pods), svc.Deployment.DesiredReplicas)
+				}
+
+				// report how many of the running pods are unhealthy
+				var podsUnhealthyMsg string
+				if int32(len(pods)-noOfUnavailablePods) > svc.Deployment.DesiredReplicas {
+					podsUnhealthyMsg = fmt.Sprintf("%v/%v pods failed health checks", noOfUnavailablePods, len(pods))
+				}
+
+				switch {
+				case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
+					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+					continue
+				case podsFewerThanDesiredReplicasMsg != "":
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
+					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+					continue
+				case podsUnhealthyMsg != "":
+					aggregatedState := mostSevereState(podHealthResponses)
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
+					continue
+				default:
+					aggregatedState := mostSevereState(podHealthResponses)
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 				}
 				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 			}
