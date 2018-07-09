@@ -290,9 +290,17 @@
                                     if (v.error != "") {
                                         showPodError = true;
                                     }
+                                    
+                                    podBootstrapColour = 'danger';
+                                    if (v.state == 'degraded') {
+                                        podBootstrapColour = 'warning';
+                                    }
+                                    if (v.state == 'healthy') {
+                                        podBootstrapColour = 'success';
+                                    }
         
                                     podChecks += '<details>' +
-                                            '<summary class="text-'+bootstrapColour+' podsummary" style="padding-bottom: 10px;font-weight: bold;">'+v.name+'</summary>' +
+                                            '<summary class="text-'+podBootstrapColour+' podsummary" style="padding-bottom: 10px;font-weight: bold;">'+v.name+'</summary>' +
                                                 '<div style="display:flex;">' +
                                                         '<div style="width:50%;">' +
                                                         '<dt>State</dt>' +
