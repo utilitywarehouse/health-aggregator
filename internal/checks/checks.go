@@ -97,6 +97,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 				}
 
 				noOfUnavailablePods := 0
+				noOfHealthyPods := 0
 
 				var podHealthResponses []model.PodHealthResponse
 				for _, pod := range pods {
@@ -110,6 +111,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 						noOfUnavailablePods++
 						log.Debugf("pod %v (service %v) health check returned an error: %v", pod.Name, pod.ServiceName, err.Error())
 					} else {
+						noOfHealthyPods++
 						if aggregatorCounterVec != nil {
 							aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "success"}).Inc()
 						}
@@ -132,21 +134,21 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 
 				switch {
 				case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
-					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 					continue
 				case podsFewerThanDesiredReplicasMsg != "":
-					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 					continue
 				case podsUnhealthyMsg != "":
 					aggregatedState := mostSevereState(podHealthResponses)
-					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 					continue
 				default:
 					aggregatedState := mostSevereState(podHealthResponses)
-					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
+					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 				}
 				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 			}
