@@ -95,8 +95,6 @@ func (h reloadHandler) reload(mgoRepo *db.MongoRepository) http.HandlerFunc {
 		// Get the cluster configs from k8s and places them on the namespace and service channels
 		go func() {
 			h.discovery.GetClusterHealthcheckConfig()
-			close(h.namespaces)
-			close(h.services)
 		}()
 
 		responseWithJSON(w, http.StatusOK, map[string]string{"message": "ok"})
