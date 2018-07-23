@@ -45,6 +45,7 @@ type ServiceStatus struct {
 	CheckTime           time.Time           `json:"checkTime" bson:"checkTime"`
 	HumanisedCheckTime  string              `json:"-"`
 	AggregatedState     string              `json:"aggregatedState" bson:"aggregatedState"`
+	HealthyPods         int                 `json:"healthyPods" bson:"healthyPods"`
 	StatePriority       int                 `json:"-"`
 	StateSince          time.Time           `json:"stateSince" bson:"stateSince"`
 	PreviousState       string              `json:"previousState" bson:"previousState"`

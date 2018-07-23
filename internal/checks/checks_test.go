@@ -91,6 +91,7 @@ func Test_DoHealthchecksForAHealthyService(t *testing.T) {
 
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Healthy, s.AggregatedState)
+		assert.Equal(t, 2, s.HealthyPods)
 		assert.Equal(t, "", s.Error)
 		assert.Equal(t, 2, len(s.PodChecks))
 	}
@@ -128,6 +129,7 @@ func Test_DoHealthchecksForAnUnhealthyService(t *testing.T) {
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Unhealthy, s.AggregatedState)
 		assert.Equal(t, "", s.Error)
+		assert.Equal(t, 0, s.HealthyPods)
 		assert.Equal(t, 2, len(s.PodChecks))
 	}
 }
@@ -164,6 +166,7 @@ func Test_DoHealthchecksForADegradedService(t *testing.T) {
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Degraded, s.AggregatedState)
 		assert.Equal(t, "", s.Error)
+		assert.Equal(t, 0, s.HealthyPods)
 		assert.Equal(t, 2, len(s.PodChecks))
 	}
 }
@@ -199,6 +202,7 @@ func Test_DoHealthchecksWhenFewerThanDesiredPodsRunning(t *testing.T) {
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Unhealthy, s.AggregatedState)
 		assert.Equal(t, "there are 1 fewer running pods (1) than the number of desired replicas (2)", s.Error)
+		assert.Equal(t, 1, s.HealthyPods)
 		assert.Equal(t, 1, len(s.PodChecks))
 	}
 }
@@ -229,6 +233,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenNoPodsRunning(t *testing.T) {
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Unhealthy, s.AggregatedState)
 		assert.Equal(t, "desired replicas is set to 2 but there are no pods running", s.Error)
+		assert.Equal(t, 0, s.HealthyPods)
 		assert.Equal(t, 0, len(s.PodChecks))
 	}
 }
@@ -264,6 +269,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenPodHealthCheckReturnServerError(t *t
 	case s := <-statusResponses:
 		assert.Equal(t, constants.Unhealthy, s.AggregatedState)
 		assert.Equal(t, "", s.Error)
+		assert.Equal(t, 0, s.HealthyPods)
 		assert.Equal(t, 1, len(s.PodChecks))
 	}
 }
