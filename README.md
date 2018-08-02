@@ -172,6 +172,8 @@ https://health-aggregator.prod.uw.systems/?ns={namespace_name}&env={environment}
 
 E.g: https://health-aggregator.prod.uw.systems/?ns=partner-portal&env=dev
 
+**Note:** Health Aggregator was not designed to run in multiple namespaces, so the GUI will only work (right now) for the domain `health-aggregator.{dev|prod}.uw.systems`.
+
 ![Health Aggregator GUI](https://github.com/utilitywarehouse/health-aggregator/blob/master/health-aggregator-gui.png)
 
 Tile colour represents the aggregated health of the Pods attached to the service. The aggregate health of the Service takes the most severe health state of all attached Pods. So, if one Pod is `unhealthy`, another `degraded` and another `healthy` then the aggregate health is `unhealthy` and as such represented by a red colour.
@@ -183,6 +185,8 @@ The Service name can be clicked on to show details such as:
 * What the previous state was
 * What status code and error (if any) did the pod health check return?
 * Details of the Pod health check response including the specific checks
+
+### Display Options
 
 Depending on the size of screen dispayed on, and the number of services here are some additional query parameters than can help fit the tiles to the given view:
 
