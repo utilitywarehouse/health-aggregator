@@ -10,6 +10,7 @@ A service aggregating health endpoint information from our kubernetes cluster.
 * [Requirements](#requirements)
 * [Usage](#usage)
 * [Integrating](#integrating)
+* [GUI](#gui)
 * [Endpoints](#endpoints)
   * [GET /namespaces](#get-namespaces)
   * [GET /namespaces/{namespace}/services](#get-namespacesnamespaceservices)
@@ -158,6 +159,37 @@ Copy the manifest from labs and modify the following:
 * Set the Ingress host as required for your instance
 
 Then follow `Step 2 - Annotate your namespace and services` and `Step 3 - Reload` as above.
+
+## GUI
+
+There is an auto-refreshing GUI packaged with health-aggregator for dashboards on a per namespace and environment basis. This can be accessed like so:
+
+```txt
+https://health-aggregator.prod.uw.systems/?ns={namespace_name}&env={environment}
+```
+
+**env** can be set to either of `dev` or `prod`
+
+E.g: https://health-aggregator.prod.uw.systems/?ns=partner-portal&env=dev
+
+![Health Aggregator GUI](https://github.com/utilitywarehouse/health-aggregator/blob/master/health-aggregator-gui.png)
+
+Tile colour represents the aggregated health of the Pods attached to the service. The aggregate health of the Service takes the most severe health state of all attached Pods. So, if one Pod is `unhealthy`, another `degraded` and another `healthy` then the aggregate health is `unhealthy` and as such represented by a red colour.
+
+The Service name can be clicked on to show details such as:
+
+* Time the last check was performed
+* How long has the Service been in this state
+* What the previous state was
+* What status code and error (if any) did the pod health check return?
+* Details of the Pod health check response including the specific checks
+
+Depending on the size of screen dispayed on, and the number of services here are some additional query parameters than can help fit the tiles to the given view:
+
+* `bigscreen=true` - enlarges tiles and text so as to be visible at a distance
+* `compact=true` - reduces empty space to fit as many tiles in the available area (for namespaces with many services)
+
+Both of the above query parameters can work together.
 
 ## Endpoints
 
