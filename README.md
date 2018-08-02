@@ -1,16 +1,15 @@
-Health Aggregator
-==========
+# Health Aggregator
 
 A service aggregating health endpoint information from our kubernetes cluster.
 
 [![MIT licensed][shield-license]](https://github.com/utilitywarehouse/health-aggregator/blob/master/LICENSE)
 [![CircleCI](https://circleci.com/gh/utilitywarehouse/health-aggregator.svg?style=svg)](https://circleci.com/gh/utilitywarehouse/health-aggregator)
 
-Table of Contents
------------------
+## Table of Contents
 
 * [Requirements](#requirements)
 * [Usage](#usage)
+* [Integrating](#integrating)
 * [Endpoints](#endpoints)
   * [GET /namespaces](#get-namespaces)
   * [GET /namespaces/{namespace}/services](#get-namespacesnamespaceservices)
@@ -21,15 +20,14 @@ Table of Contents
   * [GET /kube-ops/ready](#get-kube-opsready)
 * [License](#license)
 
-Requirements
-------------
+## Requirements
+
 Health Aggregator requires the following to run:
 
 * [Golang][golang] 1.9+
 * [Docker][docker]
 
-Usage
------
+## Usage
 
 From the root directory, go get all dependencies:
 
@@ -52,11 +50,11 @@ export KUBERNETES_SERVICE_PORT="8443"
 
 ### Other optional params
 
-```
+```sh
 health-aggregator --help
 ```
 
-```
+```sh
       --port                       Port to listen on (env $PORT) (default "8080")
       --ops-port                   The HTTP ops port (env $OPS_PORT) (default 8081)
       --write-timeout              The WriteTimeout for HTTP connections (env $HTTP_WRITE_TIMEOUT) (default 15)
@@ -80,8 +78,88 @@ docker-compose up -d
 health-aggregator
 ```
 
-Endpoints
------
+## Integrating
+
+It's not necessary to run your own instance of health-aggregator, although that is an option. health-aggregator can collect health check data from multiple namespaces.
+
+### To add a new namespace without running a new instance of health aggregator
+
+#### Step 1 - Include your namespace
+
+Add the namespace name to the `RESTRICT_NAMESPACE` environment variable in the `health-aggregator` kubernetes manifest in the `labs` namespace for your environment.
+
+For example:
+
+```yaml
+- name: RESTRICT_NAMESPACE
+  value: smartmetering,partner-portal,energy,crm,customer-platform,jtc,customer-onboarding,insurance
+```
+
+#### Step 2 - Annotate your namespace and services
+
+Once added and applied, health-aggregator will start to scrape the `/__/health` endpoints of all Kubernetes *Services* found in the namespace. By default, `health-aggregtor` will attempt to load the health check endpoint on port `8081`.
+
+If the most commonly used port for the `/__/health` endpoint in your particular namespace is something else e.g. `8080`, then add the following annotation in the namespace manifest:
+
+```yaml
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: my-namespace
+  labels:
+    name: my-namespace
+  annotations:
+    uw.health.aggregator.port: '8080'
+...
+```
+
+If there are services within your namespace that use a different port again, then add an annotation against the **Service**, like so:
+
+```yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/path:   /__/metrics
+    prometheus.io/port:   '8081'
+    uw.health.aggregator.port: '3000'
+...
+```
+
+Annotations added to the Service *override* any annotations at the namespace level.
+
+If there are Services which either do not have a health endpoint or you do not wish for that Service to have its health endpoint scraped, you can add the following Service annotation:
+
+```yaml
+uw.health.aggregator.enable: 'false'
+```
+
+This annotation can also be applied at namespace level and would have the effect of disabling the health scraping of all Services. Only Service which have the opposite annotation value would then be scraped:
+
+```yaml
+uw.health.aggregator.enable: 'true'
+```
+
+#### Step 3 - Reload
+
+Now that you've added annotations, force a reload. See here: [POST /reload](#post-reload).
+
+### To add an instance of health-aggregator to your namespace
+
+Note: you require an instance of mongo running in your cluster. This may be removed in future development.
+
+Copy the manifest from labs and modify the following:
+
+* The namespace name (except in the reference to `labs` in the registry URI)
+* Set `RESTRICT_NAMESPACE` to your own namespace name
+* Set the Ingress host as required for your instance
+
+Then follow `Step 2 - Annotate your namespace and services` and `Step 3 - Reload` as above.
+
+## Endpoints
 
 ### GET /namespaces
 
@@ -117,7 +195,7 @@ Return a list of services for a given namespace, including the health aggregator
   ]
 ```
 
-### GET /services 
+### GET /services
 
 Return a list of all services for the cluster, including the health aggregator settings at namespace level. Services are loaded at app startup or when doing a POST to `/reload`.
 
@@ -247,8 +325,7 @@ This POST with empty body carries out the discovery process for all health endpo
 
 This endpoint is used for the kubernetes readiness check and returns a simply 200 response code once the main http server is running.
 
-License
--------
+## License
 
 Health Aggregator is licensed under the [MIT](https://github.com/utilitywarehouse/health-aggregator/blob/master/LICENSE) license.
 
