@@ -110,7 +110,7 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 				continue
 			}
 			serviceAnnotations = overrideParentAnnotations(serviceAnnotations, namespaceAnnotations)
-			componentID := getStatusPageComponentID(svc)
+
 			appPort := getAppPortForService(&svc, serviceAnnotations.Port)
 
 			s.Services <- model.Service{
@@ -120,7 +120,6 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 				HealthAnnotations: serviceAnnotations,
 				AppPort:           appPort,
 				Deployment:        deployments[svc.Name],
-				ComponentID:       componentID,
 			}
 			log.Debugf("Added service %v to channel\n", svc.Name)
 		}
@@ -189,18 +188,6 @@ func overrideParentAnnotations(h model.HealthAnnotations, overrides model.Health
 		h.EnableScrape = overrides.EnableScrape
 	}
 	return h
-}
-
-func getStatusPageComponentID(svc v1.Service) string {
-	var componentID string
-	annotations := svc.Annotations
-
-	for k, v := range annotations {
-		if k == "statuspage.io.component.id" {
-			componentID = v
-		}
-	}
-	return componentID
 }
 
 // TODO: look to remove this usage
