@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,7 +44,6 @@ func Test_GetHealthAnnotations(t *testing.T) {
 	if err != nil {
 		assert.Fail(t, "Error getting namespace.")
 	}
-	fmt.Printf("%T\n", ns)
 
 	retrievedAnnotations, err := getHealthAnnotations(*ns)
 	if err != nil {

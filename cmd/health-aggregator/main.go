@@ -24,13 +24,11 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/handlers"
 	"github.com/utilitywarehouse/health-aggregator/internal/httpserver"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
-	"github.com/utilitywarehouse/health-aggregator/internal/statuspage"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 var (
-	gitHash           string // populated at compile time
-	statusPageBaseURL = "https://api.statuspage.io/v1"
+	gitHash string // populated at compile time
 )
 
 func main() {
@@ -94,24 +92,6 @@ func main() {
 		Desc:   "(optional) absolute path to the kubeconfig file",
 		EnvVar: "KUBECONFIG_FILEPATH",
 		Value:  "",
-	})
-	statusPageIOPageID := app.String(cli.StringOpt{
-		Name:   "statuspage-io-page-id",
-		Desc:   "The Page ID for the statuspage.io page for which health aggregator will update the state of components",
-		EnvVar: "STATUSPAGE_IO_PAGE_ID",
-		Value:  "",
-	})
-	statusPageIOAPIKey := app.String(cli.StringOpt{
-		Name:   "statuspage-io-api-key",
-		Desc:   "The API key for statuspage.io",
-		EnvVar: "STATUSPAGE_IO_API_KEY",
-		Value:  "",
-	})
-	updateStatuspageIO := app.Bool(cli.BoolOpt{
-		Name:   "update-statuspage-io",
-		Desc:   "Set to true in order to perform updates to statuspage.io components",
-		EnvVar: "UPDATE_STATUSPAGE_IO",
-		Value:  false,
 	})
 
 	app.Before = func() {
@@ -183,10 +163,8 @@ func main() {
 		healthChecker := checks.NewHealthChecker(kubeClient, metrics, "")
 		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
-		statusPageUpdater := statuspage.NewStatusPageUpdater(statusPageBaseURL, *statusPageIOPageID, *statusPageIOAPIKey, *updateStatuspageIO)
-		// Insert health check reponses into mongo that appear on the statusResponses chan, and send
-		// components that require updating on statuspage.io to the statuspageIOComponents chan
-		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, statusPageUpdater, errs)
+		// Insert health check reponses into mongo that appear on the statusResponses chan
+		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
 
 		// Log out any errors that appear on the errs chan
 		go func() {
