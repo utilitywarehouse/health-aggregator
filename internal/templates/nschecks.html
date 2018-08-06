@@ -194,18 +194,23 @@
                     var namespace = '{{.Namespace}}';
                     var env = getParameterByName('env');
                     var ribbon = document.getElementById("env-ribbon");
+                    var healthBaseUrl = '';
                     
                     ribbon.innerHTML = env;
                     if (env == 'prod') {
                         ribbon.classList.add("red");
+                        healthBaseUrl = '{{.HealthAggregatorAPIProdBaseURL}}';
                     } else {
                         ribbon.classList.add("blue");
+                        healthBaseUrl = '{{.HealthAggregatorAPIDevBaseURL}}';
                     }
                     ribbon.classList.add("mystyle");
                     if (env == "" || env == null) {
                         env = 'prod';
                     }
-                    healthUrl = 'https://health-aggregator.'+env+'.uw.systems/namespaces/'+namespace+'/services/checks'
+                    
+                    var healthUrl = healthBaseUrl + '/namespaces/'+namespace+'/services/checks';
+
                     $.ajax({
                               url: healthUrl,
                               type: "GET",
@@ -356,7 +361,7 @@
                                                 '<dd>'+value.previousState+'</dd>' +
                                             '</div>' +
                                         '</div>' +
-                                        '<a href="/namespaces/{{$.Namespace}}/services/'+serviceName+'/checks"class="btn btn-primary">History</a>' +
+                                        '<a href="' + healthBaseUrl + '/namespaces/{{$.Namespace}}/services/'+serviceName+'/checks" class="btn btn-primary">History</a>' +
                                     '</div>' +
                                 '</div> <!-- end of collapse-'+serviceName+' -->');
                                     

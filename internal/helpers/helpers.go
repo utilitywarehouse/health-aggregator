@@ -55,10 +55,10 @@ func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNam
 	svc.HealthAnnotations.Port = "3000"
 	svc.AppPort = "8080"
 
-	var deployInfo model.DeployInfo
-	deployInfo.DesiredReplicas = int32(len(podNames))
+	var deployment model.Deployment
+	deployment.DesiredReplicas = int32(len(podNames))
 
-	svc.Deployment = deployInfo
+	svc.Deployment = deployment
 
 	healthCheck.Service = svc
 
@@ -141,10 +141,10 @@ func generateDummyService(numReplicas int) model.Service {
 	svc.HealthAnnotations.Port = "3000"
 	svc.AppPort = "8080"
 
-	var deployInfo model.DeployInfo
-	deployInfo.DesiredReplicas = int32(numReplicas)
+	var deployment model.Deployment
+	deployment.DesiredReplicas = int32(numReplicas)
 
-	svc.Deployment = deployInfo
+	svc.Deployment = deployment
 
 	return svc
 }

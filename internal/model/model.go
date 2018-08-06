@@ -9,7 +9,7 @@ type Service struct {
 	HealthcheckURL    string            `json:"healthcheckURL" bson:"healthcheckURL"`
 	HealthAnnotations HealthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
 	AppPort           string            `json:"appPort" bson:"appPort"`
-	Deployment        DeployInfo        `json:"deployment" bson:"deployment"`
+	Deployment        Deployment        `json:"deployment" bson:"deployment"`
 }
 
 // Pod describes a k8s pod
@@ -20,15 +20,23 @@ type Pod struct {
 	ServiceName string
 }
 
-// DeployInfo describes k8s deployment information, limited to DesiredReplicas
-type DeployInfo struct {
-	DesiredReplicas int32 `json:"desiredReplicas" bson:"desiredReplicas"`
+// Deployment describes k8s deployment information, limited to DesiredReplicas
+type Deployment struct {
+	Service         string `json:"-"`
+	Namespace       string `json:"-"`
+	DesiredReplicas int32  `json:"desiredReplicas" bson:"desiredReplicas"`
 }
 
 // Namespace desribes a k8s Namespace including the associated Health Aggregator configuration
 type Namespace struct {
 	Name              string            `json:"name" bson:"name"`
 	HealthAnnotations HealthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
+}
+
+// UpdateItem is...
+type UpdateItem struct {
+	Type   string
+	Object interface{}
 }
 
 // HealthAnnotations matching the associated annotations against the resource in k8s
@@ -84,8 +92,15 @@ type Check struct {
 
 // TemplatedChecks wraps a list of HealthcheckResp for rendering in an html template
 type TemplatedChecks struct {
-	Namespace string
-	Zoom      string
-	BigScreen bool
-	Compact   bool
+	Namespace                      string
+	Zoom                           string
+	BigScreen                      bool
+	Compact                        bool
+	HealthAggregatorAPIDevBaseURL  string
+	HealthAggregatorAPIProdBaseURL string
+}
+
+// ServicesStateKey is a struct that acts as a key for the state map: map[model.ServicesStateKey]model.Service
+type ServicesStateKey struct {
+	Namespace, Service string
 }
