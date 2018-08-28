@@ -7,19 +7,126 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
-	"k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	watch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// K8sDiscovery is a struct which contains fields required for the discovery of k8s Namespaces, Services
-type K8sDiscovery struct {
-	K8sClient  kubernetes.Interface
-	Namespaces chan model.Namespace
-	Services   chan model.Service
-	Errors     chan error
+// KubeDiscoveryService is responsible for Kubernetes Namespace, Service and Deployment discovery
+type KubeDiscoveryService struct {
+	K8sClient      kubernetes.Interface
+	K8sWatchEvents chan model.UpdateItem
+	Namespaces     chan model.Namespace
+	Services       chan model.Service
+	ServicesState  map[model.ServicesStateKey]model.Service
+	UpdatesQueue   chan model.UpdateItem
+	Errors         chan error
+}
+
+// NewKubeDiscoveryService created a new
+func NewKubeDiscoveryService(kubeClient *kubernetes.Clientset, state map[model.ServicesStateKey]model.Service, updatesQueue chan model.UpdateItem, errs chan error) *KubeDiscoveryService {
+	namespaces := make(chan model.Namespace, 10)
+	services := make(chan model.Service, 10)
+	watchEvents := make(chan model.UpdateItem, 10)
+	return &KubeDiscoveryService{
+		K8sClient:      kubeClient,
+		K8sWatchEvents: watchEvents,
+		Namespaces:     namespaces,
+		Services:       services,
+		ServicesState:  state,
+		UpdatesQueue:   updatesQueue,
+		Errors:         errs,
+	}
+}
+
+// UpdateDeployments processes model.UpdateItem before adding them to the UpdatesQueue
+func (d *KubeDiscoveryService) UpdateDeployments() {
+
+	for watchEvent := range d.K8sWatchEvents {
+		if string(watchEvent.Type) == string(watch.Error) {
+			log.Errorf("k8s watch event returned error")
+			continue
+		}
+		switch v := watchEvent.Object.(type) {
+		case model.Deployment:
+			d.UpdatesQueue <- model.UpdateItem{Type: string(watchEvent.Type), Object: v}
+		default:
+			fmt.Printf("unsupported type %T!\n", v)
+		}
+	}
+}
+
+// WatchDeployments sets up Kubernetes API watchers which listen for changes to objects within a
+// list of provided namespaces
+func (d *KubeDiscoveryService) WatchDeployments(namespaces []string) {
+
+	go d.UpdateDeployments()
+
+	for _, namespace := range namespaces {
+
+		watcher, err := d.K8sClient.AppsV1().Deployments(namespace).Watch(metav1.ListOptions{ResourceVersion: "0"})
+		if err != nil {
+			panic(err)
+		}
+		log.Debugf("watching deployments for namespace %s", namespace)
+
+		for event := range watcher.ResultChan() {
+			k8sDeployment, ok := event.Object.(*appsv1.Deployment)
+			if !ok {
+				log.Fatal("unexpected type")
+			}
+
+			log.Debugf("received event of type %s for service %s in namespace %s", string(event.Type), k8sDeployment.Spec.Template.Labels["app"], k8sDeployment.Namespace)
+
+			var deployment model.Deployment
+			deployment.Namespace = k8sDeployment.Namespace
+			deployment.Service = k8sDeployment.Spec.Template.Labels["app"]
+			deployment.DesiredReplicas = *k8sDeployment.Spec.Replicas
+
+			servicesStateKey := model.ServicesStateKey{Namespace: deployment.Namespace, Service: deployment.Service}
+
+			log.WithFields(log.Fields{
+				"service":   deployment.Service,
+				"namespace": deployment.Namespace,
+			}).Debugf("searching for service in state object with key: %+v", servicesStateKey)
+
+			_, exists := d.ServicesState[servicesStateKey]
+
+			if exists {
+				log.WithFields(log.Fields{
+					"service":   deployment.Service,
+					"namespace": deployment.Namespace,
+				}).Debug("found service in state object")
+				serviceState := d.ServicesState[servicesStateKey]
+				if serviceState.Deployment.DesiredReplicas != deployment.DesiredReplicas {
+					log.WithFields(log.Fields{
+						"service":   deployment.Service,
+						"namespace": deployment.Namespace,
+					}).Debugf("event of type %s received - service state updated (change in deployment)", string(event.Type))
+					serviceState.Deployment.DesiredReplicas = deployment.DesiredReplicas
+					d.ServicesState[servicesStateKey] = serviceState
+					d.K8sWatchEvents <- model.UpdateItem{Type: string(event.Type), Object: deployment}
+					continue
+				}
+				log.WithFields(log.Fields{
+					"service":   deployment.Service,
+					"namespace": deployment.Namespace,
+				}).Debugf("event of type %s received - service state unchanged (no change in deployment)", string(event.Type))
+				continue
+			}
+			log.WithFields(log.Fields{
+				"service":   deployment.Service,
+				"namespace": deployment.Namespace,
+			}).Debug("service not found service in state object")
+
+			// TODO it's service we don't know about (probably new) and we need to do something about that
+
+		}
+	}
 }
 
 // NewKubeClient returns a KubeClient for in cluster or out of cluster operation depending on whether or
@@ -46,15 +153,15 @@ func NewKubeClient(kubeConfigPath string) *kubernetes.Clientset {
 }
 
 // GetClusterHealthcheckConfig method retrieves Namespace and Service annotations specific to health aggregator
-func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
+func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 
 	log.Info("loading namespace and service annotations")
 	defaultAnnotations := model.HealthAnnotations{EnableScrape: constants.DefaultEnableScrape, Port: constants.DefaultPort}
 
-	namespaces, err := s.K8sClient.Core().Namespaces().List(metav1.ListOptions{})
+	namespaces, err := d.K8sClient.Core().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		select {
-		case s.Errors <- fmt.Errorf("Could not get namespaces via kubernetes api 1: (%v)", err):
+		case d.Errors <- fmt.Errorf("Could not get namespaces via kubernetes api 1: (%v)", err):
 		default:
 		}
 		return
@@ -64,7 +171,7 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 		namespaceAnnotations, err := getHealthAnnotations(n)
 		if err != nil {
 			select {
-			case s.Errors <- fmt.Errorf("Could not get namespace annotations via kubernetes api 2: (%v)", err):
+			case d.Errors <- fmt.Errorf("Could not get namespace annotations via kubernetes api 2: (%v)", err):
 			default:
 			}
 			return
@@ -72,24 +179,24 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 
 		namespaceAnnotations = overrideParentAnnotations(namespaceAnnotations, defaultAnnotations)
 
-		s.Namespaces <- model.Namespace{
+		d.Namespaces <- model.Namespace{
 			Name:              n.Name,
 			HealthAnnotations: namespaceAnnotations,
 		}
 
 		log.Debugf("Added namespace %v to channel\n", n.Name)
 
-		services, err := s.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{})
+		services, err := d.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{})
 		if err != nil {
 			select {
-			case s.Errors <- fmt.Errorf("Could not get services via kubernetes api: (%v)", err):
+			case d.Errors <- fmt.Errorf("Could not get services via kubernetes api: (%v)", err):
 			default:
 			}
 			return
 		}
 
 		// exclude those services where no pods are intended to run
-		deployments, depErr := s.getDeployments(n.Name)
+		deployments, depErr := d.getDeployments(n.Name)
 		if depErr != nil {
 			log.Errorf("Failed getting deployments, err: %v", depErr)
 		}
@@ -104,7 +211,7 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 			serviceAnnotations, err := getHealthAnnotations(svc)
 			if err != nil {
 				select {
-				case s.Errors <- fmt.Errorf("Could not get service annotations via kubernetes api: (%v)", err):
+				case d.Errors <- fmt.Errorf("Could not get service annotations via kubernetes api: (%v)", err):
 				default:
 				}
 				continue
@@ -113,7 +220,7 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 
 			appPort := getAppPortForService(&svc, serviceAnnotations.Port)
 
-			s.Services <- model.Service{
+			d.Services <- model.Service{
 				Name:              svc.Name,
 				Namespace:         n.Name,
 				HealthcheckURL:    fmt.Sprintf("http://%s.%s:%s/__/health", svc.Name, n.Name, serviceAnnotations.Port),
@@ -126,16 +233,16 @@ func (s *K8sDiscovery) GetClusterHealthcheckConfig() {
 	}
 }
 
-func (s *K8sDiscovery) getDeployments(namespaceName string) (map[string]model.DeployInfo, error) {
-	deploymentList, err := s.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
+func (d *KubeDiscoveryService) getDeployments(namespaceName string) (map[string]model.Deployment, error) {
+	deploymentList, err := d.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
 	}
 
-	deployments := make(map[string]model.DeployInfo)
-	for _, d := range deploymentList.Items {
-		deployments[d.Name] = model.DeployInfo{
-			DesiredReplicas: *d.Spec.Replicas,
+	deployments := make(map[string]model.Deployment)
+	for _, deployment := range deploymentList.Items {
+		deployments[deployment.Name] = model.Deployment{
+			DesiredReplicas: *deployment.Spec.Replicas,
 		}
 	}
 	return deployments, nil
@@ -144,8 +251,8 @@ func (s *K8sDiscovery) getDeployments(namespaceName string) (map[string]model.De
 func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error) {
 
 	switch k8sObject.(type) {
-	case v1.Namespace:
-		ns := k8sObject.(v1.Namespace)
+	case corev1.Namespace:
+		ns := k8sObject.(corev1.Namespace)
 		annotations := ns.Annotations
 		var h model.HealthAnnotations
 		for k, v := range annotations {
@@ -159,8 +266,8 @@ func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error
 			}
 		}
 		return h, nil
-	case v1.Service:
-		svc := k8sObject.(v1.Service)
+	case corev1.Service:
+		svc := k8sObject.(corev1.Service)
 		annotations := svc.Annotations
 		var h model.HealthAnnotations
 		for k, v := range annotations {
@@ -190,8 +297,7 @@ func overrideParentAnnotations(h model.HealthAnnotations, overrides model.Health
 	return h
 }
 
-// TODO: look to remove this usage
-func getAppPortForService(k8sService *v1.Service, serviceScrapePort string) string {
+func getAppPortForService(k8sService *corev1.Service, serviceScrapePort string) string {
 	servicePorts := k8sService.Spec.Ports
 	for _, port := range servicePorts {
 		scrapePort, _ := strconv.Atoi(serviceScrapePort)

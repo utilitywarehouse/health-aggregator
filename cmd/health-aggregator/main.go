@@ -93,6 +93,18 @@ func main() {
 		EnvVar: "KUBECONFIG_FILEPATH",
 		Value:  "",
 	})
+	guiDevAPIBaseURL := app.String(cli.StringOpt{
+		Name:   "gui-dev-api-base-url",
+		Desc:   "Where should health-aggregator GUI source its dev data from e.g. https://health-aggregator.dev.uw.systems",
+		EnvVar: "GUI_DEV_API_BASE_URL",
+		Value:  "https://health-aggregator.dev.uw.systems",
+	})
+	guiProdAPIBaseURL := app.String(cli.StringOpt{
+		Name:   "gui-prod-api-base-url",
+		Desc:   "Where should health-aggregator GUI source its prod data from e.g. https://health-aggregator.prod.uw.systems",
+		EnvVar: "GUI_PROD_API_BASE_URL",
+		Value:  "https://health-aggregator.prod.uw.systems",
+	})
 
 	app.Before = func() {
 		setLogger(logLevel)
@@ -122,14 +134,26 @@ func main() {
 
 		createIndex(mgoRepo)
 
+		servicesState, stateErr := db.GetServicesState(mgoRepo)
+		if stateErr != nil {
+			log.Panicf("unable to load services state: %v", stateErr)
+		}
+
 		// Make all required channels
 		errs := make(chan error, 10)
+		updateItems := make(chan model.UpdateItem, 10)
 		servicesToScrape := make(chan model.Service, 1000)
 		statusResponses := make(chan model.ServiceStatus, 1000)
 
 		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
 
-		router := handlers.NewRouter(mgoRepo, kubeClient)
+		discoveryService := discovery.NewKubeDiscoveryService(kubeClient, servicesState, updateItems, errs)
+		go discoveryService.WatchDeployments(*restrictToNamespaces)
+
+		updaterService := db.NewUpdaterService(updateItems, errs, mgoRepo)
+		go updaterService.DoUpdates()
+
+		router := handlers.NewRouter(mgoRepo, discoveryService, *guiDevAPIBaseURL, *guiProdAPIBaseURL)
 		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
 		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)

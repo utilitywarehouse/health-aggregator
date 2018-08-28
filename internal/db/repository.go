@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
+	watch "k8s.io/apimachinery/pkg/watch"
 )
 
 // K8sServicesConfigUpdater is a receiver object allowing UpsertServiceConfigs to be called
@@ -23,6 +24,22 @@ type K8sServicesConfigUpdater struct {
 type K8sNamespacesConfigUpdater struct {
 	Namespaces chan model.Namespace
 	Repo       *MongoRepository
+}
+
+// UpdaterService is responsible for accepting items (Services, Deployments etc) for update (in Mongo)
+type UpdaterService struct {
+	UpdatesQueue chan model.UpdateItem
+	Repo         *MongoRepository
+	Errors       chan error
+}
+
+// NewUpdaterService returns a new UpdaterService
+func NewUpdaterService(updateItems chan model.UpdateItem, errs chan error, repo *MongoRepository) UpdaterService {
+	return UpdaterService{
+		UpdatesQueue: updateItems,
+		Repo:         repo,
+		Errors:       errs,
+	}
 }
 
 // NewK8sServicesConfigUpdater creates a new K8sServicesConfigUpdater
@@ -59,6 +76,21 @@ func (k K8sServicesConfigUpdater) UpsertServiceConfigs() {
 	}
 }
 
+// GetServicesState loads the current known Services (including their health-aggregator annotations and
+// deployment details) into a map[model.ServicesStateKey]model.Service
+func GetServicesState(mgoRepo *MongoRepository) (map[model.ServicesStateKey]model.Service, error) {
+	log.Debug("loading services state")
+	state := make(map[model.ServicesStateKey]model.Service)
+	services, err := FindAllServices(mgoRepo)
+	if err != nil {
+		return state, errors.New("unable to retrieve services state")
+	}
+	for _, service := range services {
+		state[model.ServicesStateKey{Namespace: service.Namespace, Service: service.Name}] = service
+	}
+	return state, nil
+}
+
 // UpsertNamespaceConfigs inserts or updates Namespaces from a provided cannel of type Namespace, sending any
 // errors to a channel of type error
 func (k K8sNamespacesConfigUpdater) UpsertNamespaceConfigs() {
@@ -76,6 +108,106 @@ func (k K8sNamespacesConfigUpdater) UpsertNamespaceConfigs() {
 	}
 }
 
+// DoUpdates takes items (model.UpdateItem) from the UpdatesQueue channel and updates
+// those items in Mongo accordingly
+func (u *UpdaterService) DoUpdates() {
+	for updateItem := range u.UpdatesQueue {
+
+		log.WithFields(log.Fields{
+			"type": updateItem.Type,
+		}).Debug("new update item being processed")
+
+		switch updateItem.Object.(type) {
+		case model.Deployment:
+			u.processDeployment(updateItem)
+		default:
+			select {
+			case u.Errors <- fmt.Errorf("unsupported object type: %T", updateItem.Object):
+			default:
+			}
+			continue
+		}
+	}
+	return
+}
+
+func (u *UpdaterService) processDeployment(updateItem model.UpdateItem) {
+	log.WithFields(log.Fields{
+		"type": updateItem.Type,
+	}).Debug("identified update item as a deployment")
+
+	if updateItem.Type == string(watch.Deleted) {
+		deployment, ok := updateItem.Object.(model.Deployment)
+		if ok {
+
+			log.WithFields(log.Fields{
+				"type": updateItem.Type,
+			}).Debugf("deleting deployment: %+v", deployment)
+
+			u.deleteDeployment(deployment)
+
+			return
+		}
+		select {
+		case u.Errors <- fmt.Errorf("failed to delete deployment - could not cast update item to model.Deployment"):
+		default:
+		}
+		return
+	}
+	if updateItem.Type == string(watch.Added) || updateItem.Type == string(watch.Modified) {
+		deployment, ok := updateItem.Object.(model.Deployment)
+		if ok {
+
+			log.WithFields(log.Fields{
+				"type": updateItem.Type,
+			}).Debugf("updating deployment: %+v", deployment)
+
+			u.updateDeployment(deployment, deployment.DesiredReplicas)
+
+			return
+		}
+		select {
+		case u.Errors <- fmt.Errorf("failed to modify deployment - could not cast update item to model.Deployment"):
+		default:
+		}
+		return
+	}
+}
+
+func (u *UpdaterService) deleteDeployment(updatedDeployment model.Deployment) {
+	u.updateDeployment(updatedDeployment, 0)
+}
+
+func (u *UpdaterService) updateDeployment(updatedDeployment model.Deployment, desiredReplicas int32) {
+	collection := u.Repo.Db().C(constants.ServicesCollection)
+
+	var service model.Service
+	if err := collection.Find(bson.M{"namespace": updatedDeployment.Namespace, "name": updatedDeployment.Service}).One(&service); err != nil {
+		if err != nil {
+
+			log.WithFields(log.Fields{
+				"service":   updatedDeployment.Service,
+				"namespace": updatedDeployment.Namespace,
+			}).WithError(err).Error("failed to modify deployment")
+
+			return
+		}
+	}
+
+	service.Deployment.DesiredReplicas = desiredReplicas
+
+	_, err := collection.Upsert(bson.M{"name": updatedDeployment.Service, "namespace": updatedDeployment.Namespace}, service)
+	if err != nil {
+
+		log.WithFields(log.Fields{
+			"service":   updatedDeployment.Service,
+			"namespace": updatedDeployment.Namespace,
+		}).WithError(err).Error("failed to modify deployment")
+
+		return
+	}
+}
+
 // InsertHealthcheckResponses inserts health check responses picked from a channel of type ServiceStatus, sending any
 // errors to a channel of type error
 func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error) {
@@ -90,7 +222,11 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan m
 		var prevCheckResponse model.ServiceStatus
 		if err := collection.Find(bson.M{"service.namespace": r.Service.Namespace, "service.name": r.Service.Name}).Sort("-checkTime").Limit(1).One(&prevCheckResponse); err != nil {
 			if err != mgo.ErrNotFound {
-				log.WithError(err).Errorf("failed to get previous healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
+
+				log.WithError(err).WithFields(log.Fields{
+					"service":   r.Service.Name,
+					"namespace": r.Service.Namespace,
+				}).Error("failed to get previous healthcheck response")
 			}
 		}
 
@@ -104,7 +240,12 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan m
 
 		err := collection.Insert(r)
 		if err != nil {
-			log.WithError(err).Errorf("failed to insert healthcheck response for %s for namespace %s", r.Service.Name, r.Service.Namespace)
+
+			log.WithError(err).WithFields(log.Fields{
+				"service":   r.Service.Name,
+				"namespace": r.Service.Namespace,
+			}).Error("failed to insert healthcheck response")
+
 			return
 		}
 	}

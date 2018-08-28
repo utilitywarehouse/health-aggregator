@@ -72,7 +72,7 @@ func Test_GetClusterHealthcheckConfig(t *testing.T) {
 	services := make(chan model.Service, 10)
 	errs := make(chan error, 10)
 
-	s := &K8sDiscovery{K8sClient: client, Namespaces: namespaces, Services: services, Errors: errs}
+	s := &KubeDiscoveryService{K8sClient: client, Namespaces: namespaces, Services: services, Errors: errs}
 
 	go func() {
 		s.GetClusterHealthcheckConfig()

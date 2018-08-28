@@ -295,7 +295,7 @@ func Test_UpsertServiceConfigs(t *testing.T) {
 		Name:              s1Name,
 		Namespace:         ns1Name,
 		HealthAnnotations: defaultHealthAnnotations,
-		Deployment: model.DeployInfo{
+		Deployment: model.Deployment{
 			DesiredReplicas: 1,
 		},
 		AppPort: "80",
@@ -305,7 +305,7 @@ func Test_UpsertServiceConfigs(t *testing.T) {
 		Name:              s2Name,
 		Namespace:         ns1Name,
 		HealthAnnotations: noScrapeHealthAnnotations,
-		Deployment: model.DeployInfo{
+		Deployment: model.Deployment{
 			DesiredReplicas: 1,
 		},
 		AppPort: "80",
@@ -330,7 +330,7 @@ func Test_UpsertServiceConfigs(t *testing.T) {
 		Name:              s1Name,
 		Namespace:         ns1Name,
 		HealthAnnotations: model.HealthAnnotations{EnableScrape: "false", Port: "3000"},
-		Deployment: model.DeployInfo{
+		Deployment: model.Deployment{
 			DesiredReplicas: 2,
 		},
 		AppPort: "8080",
@@ -340,7 +340,7 @@ func Test_UpsertServiceConfigs(t *testing.T) {
 		Name:              s2Name,
 		Namespace:         ns1Name,
 		HealthAnnotations: model.HealthAnnotations{EnableScrape: "false", Port: "3000"},
-		Deployment: model.DeployInfo{
+		Deployment: model.Deployment{
 			DesiredReplicas: 3,
 		},
 		AppPort: "8090",
@@ -524,6 +524,126 @@ func Test_DropDB(t *testing.T) {
 	assert.True(t, len(findAllServices(s.repo)) == 0)
 }
 
+func Test_ProcessDeployment(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	repo := s.repo.WithNewSession()
+
+	nsName := helpers.String(10)
+	service1 := generateDummyService(nsName)
+	service2 := generateDummyService(nsName)
+	service3 := generateDummyService(nsName)
+
+	service1.Deployment.DesiredReplicas = 0
+	service2.Deployment.DesiredReplicas = 2
+	service3.Deployment.DesiredReplicas = 3
+
+	insertItems(s.repo, service1, service2, service3)
+
+	updater := NewUpdaterService(nil, nil, repo)
+
+	service1UpdatedDeployment := model.Deployment{DesiredReplicas: 2, Service: service1.Name, Namespace: nsName}
+	service2UpdatedDeployment := model.Deployment{DesiredReplicas: 4, Service: service2.Name, Namespace: nsName}
+	service3UpdatedDeployment := model.Deployment{DesiredReplicas: 0, Service: service3.Name, Namespace: nsName}
+
+	updateItem1 := model.UpdateItem{Type: "ADDED", Object: service1UpdatedDeployment}
+	updateItem2 := model.UpdateItem{Type: "MODIFIED", Object: service2UpdatedDeployment}
+	updateItem3 := model.UpdateItem{Type: "DELETED", Object: service3UpdatedDeployment}
+
+	updater.processDeployment(updateItem1)
+	assert.Equal(t, int32(2), findService(service1.Name, nsName, repo).Deployment.DesiredReplicas)
+
+	updater.processDeployment(updateItem2)
+	assert.Equal(t, int32(4), findService(service2.Name, nsName, repo).Deployment.DesiredReplicas)
+
+	updater.processDeployment(updateItem3)
+	assert.Equal(t, int32(0), findService(service3.Name, nsName, repo).Deployment.DesiredReplicas)
+}
+
+func Test_DoUpdates(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	repo := s.repo.WithNewSession()
+
+	nsName := helpers.String(10)
+	service1 := generateDummyService(nsName)
+	service2 := generateDummyService(nsName)
+	service3 := generateDummyService(nsName)
+
+	service1.Deployment.DesiredReplicas = 1
+	service2.Deployment.DesiredReplicas = 1
+	service3.Deployment.DesiredReplicas = 1
+
+	insertItems(s.repo, service1, service2, service3)
+
+	updateItems := make(chan model.UpdateItem, 10)
+	errs := make(chan error, 10)
+	updater := NewUpdaterService(updateItems, errs, repo)
+
+	service1UpdatedDeployment := model.Deployment{DesiredReplicas: 2, Service: service1.Name, Namespace: nsName}
+	service2UpdatedDeployment := model.Deployment{DesiredReplicas: 4, Service: service2.Name, Namespace: nsName}
+	service3UpdatedDeployment := model.Deployment{DesiredReplicas: 0, Service: service3.Name, Namespace: nsName}
+
+	updateItem1 := model.UpdateItem{Type: "ADDED", Object: service1UpdatedDeployment}
+	updateItem2 := model.UpdateItem{Type: "MODIFIED", Object: service2UpdatedDeployment}
+	updateItem3 := model.UpdateItem{Type: "DELETED", Object: service3UpdatedDeployment}
+
+	updateItems <- updateItem1
+	updateItems <- updateItem2
+	updateItems <- updateItem3
+	close(updateItems)
+
+	done := make(chan struct{})
+	go func() {
+		updater.DoUpdates()
+		close(done)
+	}()
+
+	select {
+	case <-errs:
+		t.Errorf("Should not get an error")
+	default:
+	}
+
+	<-done
+
+	assert.Equal(t, int32(2), findService(service1.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(4), findService(service2.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(0), findService(service3.Name, nsName, repo).Deployment.DesiredReplicas)
+}
+
+func Test_DoUpdatesUnsupportedObject(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	repo := s.repo.WithNewSession()
+
+	updateItems := make(chan model.UpdateItem, 10)
+	errs := make(chan error, 10)
+	updater := NewUpdaterService(updateItems, errs, repo)
+
+	var emptyStruct struct{}
+
+	updateItem := model.UpdateItem{Type: "ADDED", Object: emptyStruct}
+
+	updateItems <- updateItem
+	close(updateItems)
+
+	done := make(chan struct{})
+	go func() {
+		updater.DoUpdates()
+		close(done)
+		close(errs)
+	}()
+
+	for err := range errs {
+		assert.Contains(t, err.Error(), "unsupported")
+	}
+	<-done
+}
+
 func findNamespace(name string, repo *MongoRepository) model.Namespace {
 	var n model.Namespace
 	s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{"name": name}).One(&n)
@@ -605,7 +725,7 @@ func generateDummyService(namespace string) model.Service {
 	svc.Name = helpers.String(10)
 	svc.Namespace = namespace
 	svc.AppPort = strconv.Itoa(randInRange(8080, 9080))
-	svc.Deployment = model.DeployInfo{DesiredReplicas: int32(randInRange(1, 6))}
+	svc.Deployment = model.Deployment{DesiredReplicas: int32(randInRange(1, 6))}
 	svc.HealthAnnotations = model.HealthAnnotations{EnableScrape: "true", Port: strconv.Itoa(randInRange(8080, 9080))}
 
 	return svc
