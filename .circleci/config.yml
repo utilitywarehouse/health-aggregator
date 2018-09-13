@@ -50,7 +50,7 @@ jobs:
   deploy-to-kube:
     environment:
       SERVICE: health-aggregator
-      NAMESPACE: labs
+      NAMESPACE: health-aggregator
       UW_DOCKER_REGISTRY: registry.uw.systems
       DEPLOYMENT: health-aggregator
       CONTAINER: health-aggregator
