@@ -12,13 +12,7 @@ A service aggregating health endpoint information from our kubernetes cluster.
 * [Integrating](#integrating)
 * [GUI](#gui)
 * [Endpoints](#endpoints)
-  * [GET /namespaces](#get-namespaces)
-  * [GET /namespaces/{namespace}/services](#get-namespacesnamespaceservices)
-  * [GET /services](#get-services)
-  * [GET /namespaces/{namespace}/services/{service}/checks](#get-namespacesnamespaceservicesservicechecks)
-  * [GET /namespaces/{namespace}/services/checks](#get-namespacesnamespaceserviceschecks)
   * [POST /reload](#post-reload)
-  * [GET /kube-ops/ready](#get-kube-opsready)
 * [License](#license)
 
 ## Requirements
@@ -85,18 +79,7 @@ It's not necessary to run your own instance of health-aggregator, although that 
 
 ### To add a new namespace without running a new instance of health aggregator
 
-#### Step 1 - Include your namespace
-
-Add the namespace name to the `RESTRICT_NAMESPACE` environment variable in the `health-aggregator` kubernetes manifest in the `labs` namespace for your environment.
-
-For example:
-
-```yaml
-- name: RESTRICT_NAMESPACE
-  value: smartmetering,partner-portal,energy,crm,customer-platform,jtc,customer-onboarding,insurance
-```
-
-#### Step 2 - Annotate your namespace and services
+#### Step 1 - Annotate your namespace and services
 
 Once added and applied, health-aggregator will start to scrape the `/__/health` endpoints of all Kubernetes *Services* found in the namespace. By default, `health-aggregtor` will attempt to load the health check endpoint on port `8081`.
 
@@ -144,222 +127,61 @@ This annotation can also be applied at namespace level and would have the effect
 uw.health.aggregator.enable: 'true'
 ```
 
+#### Step 2 - Include your namespace
+
+Add the namespace name to the `RESTRICT_NAMESPACE` environment variable in the `health-aggregator` kubernetes manifest in the `health-aggregator` namespace for your environment.
+
+For example:
+
+```yaml
+- name: RESTRICT_NAMESPACE
+  value: smartmetering,partner-portal,energy,crm,customer-platform,jtc,customer-onboarding,insurance
+```
+
 #### Step 3 - Reload
 
 Now that you've added annotations, force a reload. See here: [POST /reload](#post-reload).
 
 ### To add an instance of health-aggregator to your namespace
 
-Note: you require an instance of mongo running in your cluster. This may be removed in future development.
+Note: you require an instance of mongo running in your cluster.
 
-Copy the manifest from labs and modify the following:
+Follow `Step 1 - Annotate your namespace and services`.
 
-* The namespace name (except in the reference to `labs` in the registry URI)
+Then, copy the manifest from the health-aggregator namespace and modify the following:
+
+* The namespace name
 * Set `RESTRICT_NAMESPACE` to your own namespace name
 * Set the Ingress host as required for your instance
 
-Then follow `Step 2 - Annotate your namespace and services` and `Step 3 - Reload` as above.
+Apply the manifest and run `Step 3 - Reload` as above.
+
+To expose checks via the API you need health-aggregator-api. For the GUI, run an instance of health-aggregator-ui.
 
 ## GUI
 
-There is an auto-refreshing GUI packaged with health-aggregator for dashboards on a per namespace and environment basis. This can be accessed like so:
+A UI exists for health aggregator ([health-aggregator-ui](https://github.com/utilitywarehouse/health-aggregator-ui)) and this can be found here:
 
-```txt
-https://health-aggregator.prod.uw.systems/?ns={namespace_name}&env={environment}
-```
+  `https://health-aggregator.{dev|prod}.uw.systems/?ns={namespace_name}`
 
-**env** can be set to either of `dev` or `prod`
+E.g:
 
-E.g: https://health-aggregator.prod.uw.systems/?ns=partner-portal&env=dev
-
-**Note:** Health Aggregator was not designed to run in multiple namespaces, so the GUI will only work (right now) for the domain `health-aggregator.{dev|prod}.uw.systems`.
-
-![Health Aggregator GUI](https://github.com/utilitywarehouse/health-aggregator/blob/master/health-aggregator-gui.png)
-
-Tile colour represents the aggregated health of the Pods attached to the service. The aggregate health of the Service takes the most severe health state of all attached Pods. So, if one Pod is `unhealthy`, another `degraded` and another `healthy` then the aggregate health is `unhealthy` and as such represented by a red colour.
-
-The Service name can be clicked on to show details such as:
-
-* Time the last check was performed
-* How long has the Service been in this state
-* What the previous state was
-* What status code and error (if any) did the pod health check return?
-* Details of the Pod health check response including the specific checks
-
-### Display Options
-
-Depending on the size of screen dispayed on, and the number of services here are some additional query parameters than can help fit the tiles to the given view:
-
-* `bigscreen=true` - enlarges tiles and text so as to be visible at a distance
-* `compact=true` - reduces empty space to fit as many tiles in the available area (for namespaces with many services)
-
-Both of the above query parameters can work together.
+[https://health-aggregator.prod.uw.systems/?ns=partner-portal](https://health-aggregator.prod.uw.systems/?ns=partner-portal)
 
 ## Endpoints
 
-### GET /namespaces
-
-Return a list of namespaces for the cluster, including the health aggregator settings at namespace level. Namespaces are loaded at app startup or when doing a POST to `/reload`.
-
-```json
-  [
-    {
-      "name": "acs",
-      "healthAnnotations": {
-        "enableScrape": "true",
-        "port": "8080"
-      }
-    }
-  ]
-```
-
-### GET /namespaces/{namespace}/services 
-
-Return a list of services for a given namespace, including the health aggregator settings at service level. Services are loaded at app startup or when doing a POST to `/reload`.
-
-```json
-  [
-    {
-      "name": "redis",
-      "namespace": "auth",
-      "healthcheckURL": "http://redis.auth:8080/__/health",
-      "healthAnnotations": {
-        "enableScrape": "true",
-        "port": "8080"
-      }
-    }
-  ]
-```
-
-### GET /services
-
-Return a list of all services for the cluster, including the health aggregator settings at namespace level. Services are loaded at app startup or when doing a POST to `/reload`.
-
-```json
-  [
-    {
-      "name": "redis",
-      "namespace": "auth",
-      "healthcheckURL": "http://redis.auth:8080/__/health",
-      "healthAnnotations": {
-        "enableScrape": "true",
-        "port": "8080"
-      }
-    }
-  ]
-```
-
-### GET /namespaces/{namespace}/services/{service}/checks
-
-Return a list of the last 50 checks for a service sort in time descending order. Checks are carried out at regular intervals as specified within the app.
-
-```json
-  [
-    {
-      "service": {
-        "name": "uw-foo",
-        "namespace": "foo-bar",
-        "healthcheckURL": "http://uw-foo.foo-bar:8080/__/health",
-        "healthAnnotations": {
-          "enableScrape": "true",
-          "port": "8080"
-        }
-      },
-      "checkTime": "2018-04-18T10:22:10.944Z",
-      "state": "unhealthy",
-      "stateSince": "2018-04-18T09:45:53.931Z",
-      "statusCode": 200,
-      "error": "",
-      "healthcheckBody": {
-        "name": "uw-foo",
-        "description": "Performs the foo bar baz functions",
-        "health": "unhealthy",
-        "checks": [
-          {
-            "name": "Database connectivity",
-            "health": "healthy",
-            "output": "connection to db1234.uw.systems is ok"
-          },
-          {
-            "name": "Message queue connection",
-            "health": "degraded",
-            "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
-            "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
-          },
-          {
-            "name": "SMTP server connectivity",
-            "health": "unhealthy",
-            "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
-            "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
-            "impact": "Users will not receive email notifications whenever a foo bar action is completed"
-          }
-        ]
-      }
-    }
-  ]
-```
-
-### GET /namespaces/{namespace}/services/checks
-
-Returns a list of the most recent check responses for each of the services in the specified namespace.
-
-Default behaviour for this endpoint is to return an HTML formatted response. Use the following header for a json response:
-
-    Accept: application/json
-
-```json
-  [
-    {
-      "service": {
-        "name": "uw-foo",
-        "namespace": "foo-bar",
-        "healthcheckURL": "http://uw-foo.foo-bar:8080/__/health",
-        "healthAnnotations": {
-          "enableScrape": "true",
-          "port": "8080"
-        }
-      },
-      "checkTime": "2018-04-18T10:22:10.944Z",
-      "state": "unhealthy",
-      "stateSince": "2018-04-18T09:45:53.931Z",
-      "statusCode": 200,
-      "error": "",
-      "healthcheckBody": {
-        "name": "uw-foo",
-        "description": "Performs the foo bar baz functions",
-        "health": "unhealthy",
-        "checks": [
-          {
-            "name": "Database connectivity",
-            "health": "healthy",
-            "output": "connection to db1234.uw.systems is ok"
-          },
-          {
-            "name": "Message queue connection",
-            "health": "degraded",
-            "output": "Connected OK to broker01.uw.systems ok\nFailed to connect to broker02.uw.systems",
-            "action": "Check that the message queue on broker02.uw.systems is running and check network connectivity"
-          },
-          {
-            "name": "SMTP server connectivity",
-            "health": "unhealthy",
-            "output": "failed to connect to smtp123.uw.systems on port 25 : Connection refused",
-            "action": "Check the SMTP server on smtp123.uw.system is running and check network connectivity",
-            "impact": "Users will not receive email notifications whenever a foo bar action is completed"
-          }
-        ]
-      }
-    }
-  ]
-```
+The application [health-aggregator-api](https://github.com/utilitywarehouse/health-aggregator-api) exposes namespace and service configuration that health-aggregator knows about, as well as health check results.
 
 ### POST /reload
 
 This POST with empty body carries out the discovery process for all health endpoints once more, allowing any annotation changes or new services and namespaces to be picked up.
 
-### GET /kube-ops/ready
+Changes to deployments for services which health-aggregator knows about are automatically picked up.
 
-This endpoint is used for the kubernetes readiness check and returns a simply 200 response code once the main http server is running.
+Reloads can be triggered from the health aggregator ui here:
+
+* [https://health-aggregator.dev.uw.systems/admin](https://health-aggregator.dev.uw.systems/admin)
+* [https://health-aggregator.prod.uw.systems/admin](https://health-aggregator.prod.uw.systems/admin)
 
 ## License
 

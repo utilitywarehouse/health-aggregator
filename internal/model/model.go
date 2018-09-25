@@ -90,16 +90,6 @@ type Check struct {
 	Impact string `json:"impact,omitempty" bson:"impact"`
 }
 
-// TemplatedChecks wraps a list of HealthcheckResp for rendering in an html template
-type TemplatedChecks struct {
-	Namespace                      string
-	Zoom                           string
-	BigScreen                      bool
-	Compact                        bool
-	HealthAggregatorAPIDevBaseURL  string
-	HealthAggregatorAPIProdBaseURL string
-}
-
 // ServicesStateKey is a struct that acts as a key for the state map: map[model.ServicesStateKey]model.Service
 type ServicesStateKey struct {
 	Namespace, Service string

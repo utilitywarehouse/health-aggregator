@@ -93,18 +93,6 @@ func main() {
 		EnvVar: "KUBECONFIG_FILEPATH",
 		Value:  "",
 	})
-	guiDevAPIBaseURL := app.String(cli.StringOpt{
-		Name:   "gui-dev-api-base-url",
-		Desc:   "Where should health-aggregator GUI source its dev data from e.g. https://health-aggregator.dev.uw.systems",
-		EnvVar: "GUI_DEV_API_BASE_URL",
-		Value:  "https://health-aggregator.dev.uw.systems",
-	})
-	guiProdAPIBaseURL := app.String(cli.StringOpt{
-		Name:   "gui-prod-api-base-url",
-		Desc:   "Where should health-aggregator GUI source its prod data from e.g. https://health-aggregator.prod.uw.systems",
-		EnvVar: "GUI_PROD_API_BASE_URL",
-		Value:  "https://health-aggregator.prod.uw.systems",
-	})
 
 	app.Before = func() {
 		setLogger(logLevel)
@@ -153,8 +141,8 @@ func main() {
 		updaterService := db.NewUpdaterService(updateItems, errs, mgoRepo)
 		go updaterService.DoUpdates()
 
-		router := handlers.NewRouter(mgoRepo, discoveryService, *guiDevAPIBaseURL, *guiProdAPIBaseURL)
-		allowedCORSMethods := h.AllowedMethods([]string{http.MethodGet, http.MethodPost, http.MethodOptions})
+		router := handlers.NewRouter(mgoRepo, discoveryService)
+		allowedCORSMethods := h.AllowedMethods([]string{http.MethodPost, http.MethodOptions})
 		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
 		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
 		go httpserver.Start(server)

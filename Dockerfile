@@ -12,9 +12,6 @@ RUN apk update \
   && git config --global url."https://${GITHUB_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/" \
   && make clean install \
   && make ${SERVICE} \
-  && mv ${SERVICE} /${SERVICE} \
-  && mkdir /templates
-
-COPY ./internal/templates/* /templates/
+  && mv ${SERVICE} /${SERVICE}
 
 CMD ["/health-aggregator"]

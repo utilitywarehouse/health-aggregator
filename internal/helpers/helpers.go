@@ -11,17 +11,6 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 )
 
-// CreateNamespace returns a model.Namespace with a randomly generated Name
-func CreateNamespace() model.Namespace {
-	return model.Namespace{
-		Name: String(10),
-		HealthAnnotations: model.HealthAnnotations{
-			Port:         "8080",
-			EnableScrape: "true",
-		},
-	}
-}
-
 const charset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -61,37 +50,6 @@ func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNam
 	svc.Deployment = deployment
 
 	healthCheck.Service = svc
-
-	// CheckTime
-	healthCheck.CheckTime = time.Now().UTC()
-
-	// PodChecks
-	var podChecks []model.PodHealthResponse
-	for _, podName := range podNames {
-		var podHealthResponse model.PodHealthResponse
-		podHealthResponse = generateDummyPodHealthResponse(podName, state...)
-		podChecks = append(podChecks, podHealthResponse)
-	}
-	healthCheck.PodChecks = podChecks
-
-	// Aggregated state
-	if len(state) == 1 {
-		healthCheck.AggregatedState = state[0]
-	} else {
-		healthCheck.AggregatedState = "unhealthy"
-	}
-
-	healthCheck.Error = String(10)
-
-	return healthCheck
-}
-
-// GenerateDummyServiceStatusForService generates a dummy healthcheck response (model.HealthcheckResp) with either random
-// state (healthy/unhealthy/degraded) or with the provided state string
-func GenerateDummyServiceStatusForService(service model.Service, namespaceName string, podNames []string, state ...string) model.ServiceStatus {
-	var healthCheck model.ServiceStatus
-
-	healthCheck.Service = service
 
 	// CheckTime
 	healthCheck.CheckTime = time.Now().UTC()
