@@ -403,8 +403,8 @@ func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, 
 	}
 }
 
-// RemoveOlderThan deletes health checks older than the given numnber of days
-func RemoveOlderThan(removeAfterDays int, mgoRepo *MongoRepository, errs chan error) {
+// RemoveChecksOlderThan deletes health checks older than the given numnber of days
+func RemoveChecksOlderThan(removeAfterDays int, mgoRepo *MongoRepository, errs chan error) {
 	err := DeleteHealthchecksOlderThan(removeAfterDays, mgoRepo)
 	if err != nil {
 		select {

@@ -466,7 +466,7 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 	close(errsChan)
 }
 
-func Test_RemoveOlderThan(t *testing.T) {
+func Test_RemoveChecksOlderThan(t *testing.T) {
 	s.SetUpTest()
 	defer s.TearDownTest()
 
@@ -487,7 +487,7 @@ func Test_RemoveOlderThan(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		RemoveOlderThan(1, s.repo, errsChan)
+		RemoveChecksOlderThan(1, s.repo, errsChan)
 		close(done)
 	}()
 

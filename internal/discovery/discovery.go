@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
+	"github.com/utilitywarehouse/health-aggregator/internal/db"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +42,36 @@ func NewKubeDiscoveryService(kubeClient *kubernetes.Clientset, state map[model.S
 		ServicesState:  state,
 		UpdatesQueue:   updatesQueue,
 		Errors:         errs,
+	}
+}
+
+// ReloadServiceConfigs gets the latest Namespace and Service configs from k8s and
+// persists them
+func (d *KubeDiscoveryService) ReloadServiceConfigs(reloadQueue chan uuid.UUID, mgoRepo *db.MongoRepository) {
+
+	for reqID := range reloadQueue {
+
+		log.Infof("reloading k8s configs for request %v", reqID.String())
+		go func(errs chan error) {
+			for e := range errs {
+				log.Printf("ERROR: %v", e)
+			}
+		}(d.Errors)
+
+		servicesUpdater := db.NewK8sServicesConfigUpdater(d.Services, mgoRepo.WithNewSession())
+		namespacesUpdater := db.NewK8sNamespacesConfigUpdater(d.Namespaces, mgoRepo.WithNewSession())
+
+		go func() {
+			namespacesUpdater.UpsertNamespaceConfigs()
+		}()
+
+		go func() {
+			servicesUpdater.UpsertServiceConfigs()
+		}()
+
+		go func() {
+			d.GetClusterHealthcheckConfig()
+		}()
 	}
 }
 
@@ -204,7 +236,7 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 		for _, svc := range services.Items {
 
 			if _, exists := deployments[svc.Name]; !exists {
-				log.Errorf("cannot find deployment for service with name %s", svc.Name)
+				log.Debugf("cannot find deployment for service with name %s", svc.Name)
 				continue
 			}
 

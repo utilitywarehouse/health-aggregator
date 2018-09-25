@@ -6,16 +6,16 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/db"
-	"github.com/utilitywarehouse/health-aggregator/internal/discovery"
 )
 
 // NewRouter returned a *mux.Router and sets up all required routes and handlers
-func NewRouter(mgoRepo *db.MongoRepository, discoveryService *discovery.KubeDiscoveryService) *mux.Router {
+func NewRouter(reloadQueue chan uuid.UUID) *mux.Router {
 	r := mux.NewRouter()
 
-	r.Handle("/reload", reloader(mgoRepo, discoveryService)).Methods(http.MethodPost)
+	r.Handle("/reload", reloader(reloadQueue)).Methods(http.MethodPost)
 
 	return r
 }
@@ -28,31 +28,11 @@ func withRepoCopy(mgoRepo *db.MongoRepository, next func(mgoRepo *db.MongoReposi
 	})
 }
 
-func reloader(mgoRepo *db.MongoRepository, discoveryService *discovery.KubeDiscoveryService) http.HandlerFunc {
+func reloader(reloadQueue chan uuid.UUID) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		go func(errs chan error) {
-			for e := range errs {
-				log.Printf("ERROR: %v", e)
-			}
-		}(discoveryService.Errors)
-
-		servicesUpdater := db.NewK8sServicesConfigUpdater(discoveryService.Services, mgoRepo.WithNewSession())
-		namespacesUpdater := db.NewK8sNamespacesConfigUpdater(discoveryService.Namespaces, mgoRepo.WithNewSession())
-
-		go func() {
-			namespacesUpdater.UpsertNamespaceConfigs()
-		}()
-
-		go func() {
-			servicesUpdater.UpsertServiceConfigs()
-		}()
-
-		go func() {
-			discoveryService.GetClusterHealthcheckConfig()
-		}()
-
-		responseWithJSON(w, http.StatusOK, map[string]string{"message": "ok"})
+		reqID := uuid.Must(uuid.NewV4())
+		reloadQueue <- uuid.Must(uuid.NewV4())
+		responseWithJSON(w, http.StatusOK, map[string]string{"message": "reload request received for id " + reqID.String()})
 	}
 }
 

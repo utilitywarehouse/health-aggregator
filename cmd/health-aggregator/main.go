@@ -14,6 +14,7 @@ import (
 	"github.com/globalsign/mgo"
 	"github.com/jawher/mow.cli"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
 	"github.com/utilitywarehouse/go-operational/op"
@@ -101,62 +102,64 @@ func main() {
 	app.Action = func() {
 		log.Debug("dialling mongo")
 
-		mgoSess, err := mgo.Dial(*dbURL)
-		if err != nil {
-			log.WithError(err).Panicf("failed to connect to mongo using connection string %v", *dbURL)
-		}
+		// Create new session
+		mgoSess := newMongoSession(*dbURL)
 		defer mgoSess.Close()
 
-		mgoRepo := db.NewMongoRepository(mgoSess, constants.DBName)
+		// Create new repository
+		mgoRepo := createMongoRepoAndIndex(mgoSess, *dropDB, constants.DBName)
 
-		// Drop the database if required
-		if *dropDB {
-			log.Info("dropping database")
-			dropErr := db.DropDB(mgoRepo)
-			if dropErr != nil {
-				log.WithError(err).Panic("failed to drop database")
-				return
-			}
-			log.Info("drop database successful")
-		}
-
-		createIndex(mgoRepo)
-
+		// Set up services state
 		servicesState, stateErr := db.GetServicesState(mgoRepo)
 		if stateErr != nil {
 			log.Panicf("unable to load services state: %v", stateErr)
 		}
 
-		// Make all required channels
 		errs := make(chan error, 10)
 		updateItems := make(chan model.UpdateItem, 10)
-		servicesToScrape := make(chan model.Service, 1000)
-		statusResponses := make(chan model.ServiceStatus, 1000)
 
+		// Create new kube client
 		kubeClient := discovery.NewKubeClient(*kubeConfigPath)
 
+		// Create new discoveryService - responsible for watching k8s deployments and getting
+		// Namespace and Service annotations
 		discoveryService := discovery.NewKubeDiscoveryService(kubeClient, servicesState, updateItems, errs)
+
+		// Watch for updates to deployments for known k8s namespaces and add
+		// updated objects to the updateItems channel
 		go discoveryService.WatchDeployments(*restrictToNamespaces)
 
+		// Create new updaterService - listens for objects to update - updateItems are put on the
+		// channel by the k8s deployments watcher (discoveryService.WatchDeployments)
 		updaterService := db.NewUpdaterService(updateItems, errs, mgoRepo)
+
+		// Persist any objects added to the updateItems channel
 		go updaterService.DoUpdates()
 
-		router := handlers.NewRouter(mgoRepo, discoveryService)
-		allowedCORSMethods := h.AllowedMethods([]string{http.MethodPost, http.MethodOptions})
-		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
-		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
-		go httpserver.Start(server)
+		// The reloadQueue receives a request UUID.
+		// Items on the reloadQueue triggers the retrieval of the latest Namespace and Service
+		// health-aggregator annotations and persists them in the data store.
+		reloadQueue := make(chan uuid.UUID)
 
-		// Start the ops HTTP server
-		metrics := setupMetrics()
-		go initOpsHTTPServer(*opsPort, mgoSess, metrics)
+		// Range over the reload queue (persists k8s services and namespaces configs)
+		go discoveryService.ReloadServiceConfigs(reloadQueue, mgoRepo)
 
-		// Schedule service health check scraping every X seconds and add services to scrape to the
-		// servicesToScrape channel
+		// Place a new request (UUID) onto the reload queue every 60 minutes.
+		reloadTicker := time.NewTicker(60 * time.Minute)
+		go func() {
+			for t := range reloadTicker.C {
+
+				log.Infof("scheduling reload of k8s annotations at %v", t)
+				reloadQueue <- uuid.Must(uuid.NewV4())
+			}
+		}()
+
+		// Schedule health check scraping every 60 seconds
+		servicesToScrape := make(chan model.Service, 1000)
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
-				log.Infof("Scheduling healthchecks at %v", t)
+				log.Infof("scheduling healthchecks at %v", t)
 				db.GetHealthchecks(mgoRepo, servicesToScrape, errs, *restrictToNamespaces...)
 			}
 		}()
@@ -166,28 +169,68 @@ func main() {
 		go func() {
 			for t := range tidyTicker.C {
 				log.Infof("tidying old healthchecks %v", t)
-				db.RemoveOlderThan(*removeAfterDays, mgoRepo, errs)
+				db.RemoveChecksOlderThan(*removeAfterDays, mgoRepo, errs)
 			}
 		}()
 
-		// Scrape health checks that appear on the servicesToScrape chan, send responses to the statusResponses
-		// chan
+		// Channel used to store the status of a health check response
+		statusResponses := make(chan model.ServiceStatus, 1000)
+
+		metrics := setupMetrics()
+		// Scrape health check endpoints for services that appear on the servicesToScrape channel
+		// and send responses to the statusResponses chan
 		healthChecker := checks.NewHealthChecker(kubeClient, metrics, "")
 		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
 		// Insert health check reponses into mongo that appear on the statusResponses chan
 		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
 
-		// Log out any errors that appear on the errs chan
+		// Log any errors that appear on the errs chan
 		go func() {
 			for e := range errs {
-				log.Printf("ERROR: %v", e)
+				log.Errorf("%v", e)
 			}
 		}()
+
+		// Set up routes and start API
+		router := handlers.NewRouter(reloadQueue)
+		allowedCORSMethods := h.AllowedMethods([]string{http.MethodPost, http.MethodOptions})
+		allowedCORSOrigins := h.AllowedOrigins([]string{"*"})
+		server := httpserver.New(*port, router, *writeTimeout, *readTimeout, allowedCORSMethods, allowedCORSOrigins)
+		go httpserver.Start(server)
+
+		// Start the Ops HTTP server
+		go initOpsHTTPServer(*opsPort, mgoSess, metrics)
 
 		graceful(server, 10)
 	}
 	app.Run(os.Args)
+}
+
+func newMongoSession(dbURL string) *mgo.Session {
+	mgoSess, err := mgo.Dial(dbURL)
+	if err != nil {
+		log.WithError(err).Panicf("failed to connect to mongo using connection string %v", dbURL)
+	}
+	return mgoSess
+}
+
+func createMongoRepoAndIndex(mgoSess *mgo.Session, dropDB bool, dbName string) *db.MongoRepository {
+
+	mgoRepo := db.NewMongoRepository(mgoSess, dbName)
+
+	if dropDB {
+		log.Info("dropping database")
+		dropErr := db.DropDB(mgoRepo)
+		if dropErr != nil {
+			log.WithError(dropErr).Panic("failed to drop database")
+		}
+		log.Info("drop database successful")
+	}
+
+	createIndex(mgoRepo)
+
+	return mgoRepo
 }
 
 func graceful(hs *http.Server, timeout time.Duration) {
@@ -267,7 +310,7 @@ func createIndex(mgoRepo *db.MongoRepository) {
 }
 
 func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics checks.Metrics) {
-	log.Debug("starting ops server")
+	log.Info("starting ops server")
 
 	promMetrics := []prometheus.Collector{}
 	for _, cv := range metrics.Counters {
@@ -283,7 +326,7 @@ func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics checks.Metrics
 		SetRevision(gitHash).
 		AddChecker("mongo", healthcheck.NewMongoHealthCheck(mgoSess, "Unable to access mongo db")).
 		AddMetrics(promMetrics...).
-		ReadyUseHealthCheck().
+		ReadyAlways().
 		WithInstrumentedChecks(),
 	)); err != nil {
 		log.WithError(err).Fatal("ops server has shut down")
