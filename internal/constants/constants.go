@@ -27,6 +27,9 @@ const (
 	// HealthAggregatorQueuedServices is the name of the metrics gauge for queued services
 	// i.e. how many services are queued right now?
 	HealthAggregatorQueuedServices = "health_aggregator_queued_services"
+	// HealthAggregatorJobDurationSeconds is the name of the metrics gauge for queued services
+	// i.e. how many services are queued right now?
+	HealthAggregatorJobDurationSeconds = "health_aggregator_job_duration_seconds"
 	// Unhealthy reprents the unhealthy state from the UW operational health endpoint spec
 	Unhealthy = "unhealthy"
 	// Healthy reprents the healthy state from the UW operational health endpoint spec

@@ -5,10 +5,11 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 )
 
-// Metrics contains Counters and Gauges for health-aggregator
+// Metrics contains Counters, Gauges and Histograms for health-aggregator
 type Metrics struct {
-	Counters map[string]*prometheus.CounterVec
-	Gauges   map[string]*prometheus.GaugeVec
+	Counters   map[string]*prometheus.CounterVec
+	Gauges     map[string]*prometheus.GaugeVec
+	Histograms map[string]*prometheus.HistogramVec
 }
 
 // SetupMetrics returns the required guages and counters for health-aggregator
@@ -17,6 +18,7 @@ func SetupMetrics() Metrics {
 
 	metrics.Counters = setupCounters()
 	metrics.Gauges = setupGauges()
+	metrics.Histograms = setupHistograms()
 
 	return metrics
 }
@@ -48,4 +50,20 @@ func setupGauges() map[string]*prometheus.GaugeVec {
 	}, []string{})
 
 	return gauges
+}
+
+func setupHistograms() map[string]*prometheus.HistogramVec {
+
+	histograms := make(map[string]*prometheus.HistogramVec)
+
+	histograms[constants.HealthAggregatorJobDurationSeconds] = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    constants.HealthAggregatorJobDurationSeconds,
+			Help:    "Health Aggregator job duration in seconds",
+			Buckets: []float64{0.2, 0.5, 1, 2, 5, 10},
+		},
+		[]string{"job_type"},
+	)
+
+	return histograms
 }

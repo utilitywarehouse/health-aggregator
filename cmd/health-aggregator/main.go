@@ -185,7 +185,7 @@ func main() {
 		go healthChecker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
 		// Insert health check reponses into mongo that appear on the statusResponses chan
-		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs)
+		go db.InsertHealthcheckResponses(mgoRepo, statusResponses, errs, metrics)
 
 		// Log any errors that appear on the errs chan
 		go func() {

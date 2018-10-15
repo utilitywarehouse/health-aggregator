@@ -211,12 +211,14 @@ func (u *UpdaterService) updateDeployment(updatedDeployment model.Deployment, de
 
 // InsertHealthcheckResponses inserts health check responses picked from a channel of type ServiceStatus, sending any
 // errors to a channel of type error
-func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error) {
+func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan model.ServiceStatus, errs chan error, metrics instrumentation.Metrics) {
 
 	repoCopy := mgoRepo.WithNewSession()
 	defer repoCopy.Close()
+	jobsDurationHistogramVec := metrics.Histograms[constants.HealthAggregatorJobDurationSeconds]
 
 	for r := range statusResponses {
+		start := time.Now()
 
 		collection := repoCopy.Db().C(constants.HealthchecksCollection)
 
@@ -247,8 +249,13 @@ func InsertHealthcheckResponses(mgoRepo *MongoRepository, statusResponses chan m
 				"namespace": r.Service.Namespace,
 			}).Error("failed to insert healthcheck response")
 
-			return
+			duration := time.Since(start)
+			jobsDurationHistogramVec.WithLabelValues("persist_result").Observe(duration.Seconds())
+
+			continue
 		}
+		duration := time.Since(start)
+		jobsDurationHistogramVec.WithLabelValues("persist_result").Observe(duration.Seconds())
 	}
 }
 

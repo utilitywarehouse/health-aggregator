@@ -430,6 +430,8 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 	s.SetUpTest()
 	defer s.TearDownTest()
 
+	metrics := instrumentation.SetupMetrics()
+
 	s1Name := helpers.String(10)
 	ns1Name := helpers.String(10)
 	ns2Name := helpers.String(10)
@@ -449,7 +451,7 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		InsertHealthcheckResponses(s.repo, servicesChan, errsChan)
+		InsertHealthcheckResponses(s.repo, servicesChan, errsChan, metrics)
 		close(done)
 	}()
 
