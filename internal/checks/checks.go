@@ -23,11 +23,12 @@ import (
 
 var (
 	client = &http.Client{
+		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: 128,
 			Dial: (&net.Dialer{
 				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
+				KeepAlive: 10 * time.Second,
 			}).Dial,
 		},
 	}
