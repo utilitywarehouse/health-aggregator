@@ -60,7 +60,7 @@ func setupHistograms() map[string]*prometheus.HistogramVec {
 		prometheus.HistogramOpts{
 			Name:    constants.HealthAggregatorJobDurationSeconds,
 			Help:    "Health Aggregator job duration in seconds",
-			Buckets: []float64{0.2, 0.5, 1, 2, 5, 10},
+			Buckets: []float64{0.2, 0.5, 1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60},
 		},
 		[]string{"job_type"},
 	)
