@@ -288,6 +288,9 @@ func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics instrumentatio
 	for _, gv := range metrics.Gauges {
 		promMetrics = append(promMetrics, gv)
 	}
+	for _, hv := range metrics.Histograms {
+		promMetrics = append(promMetrics, hv)
+	}
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", opsPort), op.NewHandler(op.
 		NewStatus(constants.AppName, constants.AppDesc).
 		AddOwner("labs", "#labs").
