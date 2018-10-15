@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/utilitywarehouse/health-aggregator/internal/helpers"
+	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"k8s.io/api/core/v1"
@@ -75,7 +75,7 @@ func Test_DoHealthchecksForAHealthyService(t *testing.T) {
 
 	setupServerReturnHealthyPod()
 
-	checker := NewHealthChecker(client, setupMetrics(), apiStub.URL)
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), apiStub.URL)
 
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
@@ -112,7 +112,7 @@ func Test_DoHealthchecksForAnUnhealthyService(t *testing.T) {
 
 	setupServerReturnUnhealthyPod()
 
-	checker := NewHealthChecker(client, setupMetrics(), apiStub.URL)
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), apiStub.URL)
 
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
@@ -149,7 +149,7 @@ func Test_DoHealthchecksForADegradedService(t *testing.T) {
 
 	setupServerReturnDegradedPod()
 
-	checker := NewHealthChecker(client, setupMetrics(), apiStub.URL)
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), apiStub.URL)
 
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
@@ -186,7 +186,7 @@ func Test_DoHealthchecksWhenFewerThanDesiredPodsRunning(t *testing.T) {
 
 	setupServerReturnHealthyPod()
 
-	checker := NewHealthChecker(client, setupMetrics(), apiStub.URL)
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), apiStub.URL)
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
 	// add services to scrape to channel
@@ -217,7 +217,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenNoPodsRunning(t *testing.T) {
 
 	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
 
-	checker := NewHealthChecker(client, setupMetrics(), "")
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), "")
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
 	// add services to scrape to channel
@@ -253,7 +253,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenPodHealthCheckReturnServerError(t *t
 
 	setupServerReturnError500()
 
-	checker := NewHealthChecker(client, setupMetrics(), apiStub.URL)
+	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), apiStub.URL)
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
 
 	// add services to scrape to channel
@@ -314,39 +314,6 @@ func attachPods(numRequired int, namespaceName string, serviceName string, clien
 		}
 	}
 	return nil
-}
-
-func setupMetrics() Metrics {
-	var metrics Metrics
-
-	metrics.Counters = setupCounters()
-	metrics.Gauges = setupGauges()
-
-	return metrics
-}
-
-func setupCounters() map[string]*prometheus.CounterVec {
-
-	counters := make(map[string]*prometheus.CounterVec)
-
-	counters[constants.HealthAggregatorOutcome] = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: constants.HealthAggregatorOutcome,
-		Help: "Counts health checks performed including the outcome (whether or not the healthcheck call was successful or not)",
-	}, []string{constants.PerformedHealthcheckResult})
-
-	return counters
-}
-
-func setupGauges() map[string]*prometheus.GaugeVec {
-
-	gauges := make(map[string]*prometheus.GaugeVec)
-
-	gauges[constants.HealthAggregatorInFlight] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: constants.HealthAggregatorInFlight,
-		Help: "Records the number of health checks which are in flight at any one time",
-	}, []string{})
-
-	return gauges
 }
 
 func setupServerReturnHealthyPod() {

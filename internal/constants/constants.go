@@ -17,12 +17,16 @@ const (
 	HealthchecksCollection = "checks"
 	// DBName is the mongo database name
 	DBName = "healthaggregator"
-	// HealthAggregatorOutcome is the name of the metrics counter
+	// HealthAggregatorOutcome is the name of the metrics counter for health check results
+	// i.e. was the check made successfully or not?
 	HealthAggregatorOutcome = "health_aggregator_outcome"
 	// PerformedHealthcheckResult represents the result of the healthcheck e.g. was the healthcheck successfully called or not
 	PerformedHealthcheckResult = "performed_healthcheck_result"
 	// HealthAggregatorInFlight records the number of health checks which are currently in flight
 	HealthAggregatorInFlight = "health_aggregator_checks_in_flight"
+	// HealthAggregatorQueuedServices is the name of the metrics gauge for queued services
+	// i.e. how many services are queued right now?
+	HealthAggregatorQueuedServices = "health_aggregator_queued_services"
 	// Unhealthy reprents the unhealthy state from the UW operational health endpoint spec
 	Unhealthy = "unhealthy"
 	// Healthy reprents the healthy state from the UW operational health endpoint spec

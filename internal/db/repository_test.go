@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	//"io/ioutil"
-	"fmt"
-	//"net/http"
 
-	//"strings"
+	"fmt"
+
 	"testing"
 
 	"github.com/globalsign/mgo"
@@ -20,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/helpers"
+	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 )
 
@@ -60,6 +59,8 @@ func Test_GetHealthchecks(t *testing.T) {
 	s.SetUpTest()
 	defer s.TearDownTest()
 
+	metrics := instrumentation.SetupMetrics()
+
 	// Create Services with Health Annotations config
 	ns1Name := helpers.String(10)
 	ns2Name := helpers.String(10)
@@ -95,11 +96,11 @@ func Test_GetHealthchecks(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		GetHealthchecks(s.repo, healthchecksNS1, errsChan, ns1Name)
+		GetHealthchecks(s.repo, healthchecksNS1, errsChan, metrics, ns1Name)
 		close(healthchecksNS1)
-		GetHealthchecks(s.repo, healthchecksNS2, errsChan, ns2Name)
+		GetHealthchecks(s.repo, healthchecksNS2, errsChan, metrics, ns2Name)
 		close(healthchecksNS2)
-		GetHealthchecks(s.repo, healthchecksAll, errsChan)
+		GetHealthchecks(s.repo, healthchecksAll, errsChan, metrics)
 		close(healthchecksAll)
 		close(done)
 	}()

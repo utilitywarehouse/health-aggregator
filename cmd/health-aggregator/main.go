@@ -24,6 +24,7 @@ import (
 	"github.com/utilitywarehouse/health-aggregator/internal/discovery"
 	"github.com/utilitywarehouse/health-aggregator/internal/handlers"
 	"github.com/utilitywarehouse/health-aggregator/internal/httpserver"
+	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
@@ -154,13 +155,15 @@ func main() {
 			}
 		}()
 
+		metrics := instrumentation.SetupMetrics()
+
 		// Schedule health check scraping every 60 seconds
 		servicesToScrape := make(chan model.Service, 1000)
 		ticker := time.NewTicker(60 * time.Second)
 		go func() {
 			for t := range ticker.C {
 				log.Infof("scheduling healthchecks at %v", t)
-				db.GetHealthchecks(mgoRepo, servicesToScrape, errs, *restrictToNamespaces...)
+				db.GetHealthchecks(mgoRepo, servicesToScrape, errs, metrics, *restrictToNamespaces...)
 			}
 		}()
 
@@ -176,7 +179,6 @@ func main() {
 		// Channel used to store the status of a health check response
 		statusResponses := make(chan model.ServiceStatus, 1000)
 
-		metrics := setupMetrics()
 		// Scrape health check endpoints for services that appear on the servicesToScrape channel
 		// and send responses to the statusResponses chan
 		healthChecker := checks.NewHealthChecker(kubeClient, metrics, "")
@@ -261,39 +263,6 @@ func setLogger(logLevel *string) {
 	log.SetLevel(lvl)
 }
 
-func setupMetrics() checks.Metrics {
-	var metrics checks.Metrics
-
-	metrics.Counters = setupCounters()
-	metrics.Gauges = setupGauges()
-
-	return metrics
-}
-
-func setupCounters() map[string]*prometheus.CounterVec {
-
-	counters := make(map[string]*prometheus.CounterVec)
-
-	counters[constants.HealthAggregatorOutcome] = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: constants.HealthAggregatorOutcome,
-		Help: "Counts health checks performed including the outcome (whether or not the healthcheck call was successful or not)",
-	}, []string{constants.PerformedHealthcheckResult})
-
-	return counters
-}
-
-func setupGauges() map[string]*prometheus.GaugeVec {
-
-	gauges := make(map[string]*prometheus.GaugeVec)
-
-	gauges[constants.HealthAggregatorInFlight] = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: constants.HealthAggregatorInFlight,
-		Help: "Records the number of health checks which are in flight at any one time",
-	}, []string{})
-
-	return gauges
-}
-
 func createIndex(mgoRepo *db.MongoRepository) {
 	log.Debugf("creating mongodb index for collection %v", constants.HealthchecksCollection)
 	c := mgoRepo.Db().C(constants.HealthchecksCollection)
@@ -309,7 +278,7 @@ func createIndex(mgoRepo *db.MongoRepository) {
 	log.Debug("index creation successful")
 }
 
-func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics checks.Metrics) {
+func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics instrumentation.Metrics) {
 	log.Info("starting ops server")
 
 	promMetrics := []prometheus.Collector{}

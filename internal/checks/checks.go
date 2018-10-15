@@ -12,8 +12,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
+	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	"k8s.io/api/core/v1"
@@ -37,22 +37,16 @@ type httpClient interface {
 	Do(req *http.Request) (resp *http.Response, err error)
 }
 
-// Metrics contains Counters and Gauges for this service
-type Metrics struct {
-	Counters map[string]*prometheus.CounterVec
-	Gauges   map[string]*prometheus.GaugeVec
-}
-
 // HealthChecker contains the httpClient
 type HealthChecker struct {
 	baseURL   string
 	client    httpClient
 	k8sClient kubernetes.Interface
-	metrics   Metrics
+	metrics   instrumentation.Metrics
 }
 
 // NewHealthChecker returns a struct with an httpClient
-func NewHealthChecker(k8sClient kubernetes.Interface, metrics Metrics, baseURL string) HealthChecker {
+func NewHealthChecker(k8sClient kubernetes.Interface, metrics instrumentation.Metrics, baseURL string) HealthChecker {
 
 	return HealthChecker{client: client, k8sClient: k8sClient, metrics: metrics, baseURL: baseURL}
 }
@@ -63,7 +57,7 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 	aggregatorCounterVec := c.metrics.Counters[constants.HealthAggregatorOutcome]
 	inFlightChecksGaugeVec := c.metrics.Gauges[constants.HealthAggregatorInFlight]
 
-	readers := 10
+	readers := 15
 	for i := 0; i < readers; i++ {
 		go func(healthchecks chan model.Service) {
 			for svc := range healthchecks {

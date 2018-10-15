@@ -10,6 +10,7 @@ import (
 	"github.com/globalsign/mgo/bson"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
+	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 	"github.com/utilitywarehouse/health-aggregator/internal/model"
 	watch "k8s.io/apimachinery/pkg/watch"
 )
@@ -388,7 +389,10 @@ func DropDB(mgoRepo *MongoRepository) error {
 
 // GetHealthchecks retrieves the list of Services (and their health annotations) from the DB and places them on a channel
 // of type Service
-func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, errs chan error, restrictToNamespace ...string) {
+func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, errs chan error, metrics instrumentation.Metrics, restrictToNamespace ...string) {
+
+	queuedServicesGaugeVec := metrics.Gauges[constants.HealthAggregatorQueuedServices]
+
 	services, err := FindAllServicesWithHealthScrapeEnabled(mgoRepo, restrictToNamespace...)
 	if err != nil {
 		select {
@@ -397,10 +401,14 @@ func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, 
 		}
 		return
 	}
+
 	log.Debugf("Adding %v service to channel with %v elements\n", len(services), len(healthchecks))
+
 	for _, s := range services {
 		healthchecks <- s
 	}
+	queuedServicesGaugeVec.With(map[string]string{}).Set(float64(len(healthchecks)))
+	fmt.Printf("Queued Services: %v\n", len(healthchecks))
 }
 
 // RemoveChecksOlderThan deletes health checks older than the given numnber of days
