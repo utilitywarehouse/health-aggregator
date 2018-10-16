@@ -87,7 +87,7 @@ func (d *KubeDiscoveryService) UpdateDeployments() {
 		case model.Deployment:
 			d.UpdatesQueue <- model.UpdateItem{Type: string(watchEvent.Type), Object: v}
 		default:
-			fmt.Printf("unsupported type %T!\n", v)
+			log.Debugf("unsupported type %T!\n", v)
 		}
 	}
 }

@@ -415,7 +415,6 @@ func GetHealthchecks(mgoRepo *MongoRepository, healthchecks chan model.Service, 
 		healthchecks <- s
 	}
 	queuedServicesGaugeVec.With(map[string]string{}).Set(float64(len(healthchecks)))
-	fmt.Printf("Queued Services: %v\n", len(healthchecks))
 }
 
 // RemoveChecksOlderThan deletes health checks older than the given numnber of days
