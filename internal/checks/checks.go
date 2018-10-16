@@ -64,7 +64,6 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 		go func(healthchecks chan model.Service) {
 			for svc := range healthchecks {
 				inFlightChecksGaugeVec.With(map[string]string{}).Inc()
-				start := time.Now()
 
 				serviceCheckTime := time.Now().UTC()
 
@@ -82,8 +81,6 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					default:
 					}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-					duration := time.Since(start)
-					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 					continue
 				}
 
@@ -92,8 +89,6 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					errMsg := fmt.Sprintf("desired replicas is set to %v but there are no pods running", svc.Deployment.DesiredReplicas)
 					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, Error: errMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-					duration := time.Since(start)
-					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 					continue
 				}
 
@@ -102,9 +97,14 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 
 				var podHealthResponses []model.PodHealthResponse
 				for _, pod := range pods {
+
 					var podHealthResponse model.PodHealthResponse
 
+					start := time.Now()
 					podHealthResponse, err := c.getHealthCheckForPod(pod, svc.AppPort)
+					duration := time.Since(start)
+					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
+
 					if err != nil {
 						if aggregatorCounterVec != nil {
 							aggregatorCounterVec.With(map[string]string{constants.PerformedHealthcheckResult: "failure"}).Inc()
@@ -137,29 +137,21 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 				case podsFewerThanDesiredReplicasMsg != "" && podsUnhealthyMsg != "":
 					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg + " - " + podsFewerThanDesiredReplicasMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-					duration := time.Since(start)
-					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 					continue
 				case podsFewerThanDesiredReplicasMsg != "":
 					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: constants.Unhealthy, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsFewerThanDesiredReplicasMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-					duration := time.Since(start)
-					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 					continue
 				case podsUnhealthyMsg != "":
 					aggregatedState := mostSevereState(podHealthResponses)
 					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-					duration := time.Since(start)
-					jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 					continue
 				default:
 					aggregatedState := mostSevereState(podHealthResponses)
 					statusResponses <- model.ServiceStatus{Service: svc, CheckTime: serviceCheckTime, AggregatedState: aggregatedState, HealthyPods: noOfHealthyPods, PodChecks: podHealthResponses, Error: podsUnhealthyMsg}
 				}
 				inFlightChecksGaugeVec.With(map[string]string{}).Dec()
-				duration := time.Since(start)
-				jobsDurationHistogramVec.WithLabelValues("health_scrape").Observe(duration.Seconds())
 			}
 		}(healthchecks)
 	}
