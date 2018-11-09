@@ -647,6 +647,76 @@ func Test_DoUpdatesUnsupportedObject(t *testing.T) {
 	<-done
 }
 
+func Test_DeleteStaleServices(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	ns1Name := helpers.String(10)
+
+	s1 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s1.UpdatedAt = time.Now().Add(time.Duration(-(constants.ReloadServicesIntervalMins)) * time.Minute)
+
+	s2 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s2.UpdatedAt = time.Now().Add(time.Duration(-150) * time.Minute)
+
+	s3 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s3.UpdatedAt = time.Now().Add(time.Duration(-150) * time.Minute)
+
+	insertItems(s.repo, s1, s2, s3)
+
+	errsChan := make(chan error, 10)
+
+	RemoveStaleServices(s.repo, errsChan)
+
+	select {
+	case <-errsChan:
+		t.Errorf("Should not get an error")
+	default:
+	}
+
+	services := findAllServices(s.repo)
+
+	require.Equal(t, 1, len(services), "Expecting only one service remaining.")
+
+	for _, service := range services {
+		assert.Equal(t, s1.Name, service.Name)
+	}
+
+}
+
+func Test_DeleteStaleServicesNoServicesUpdatedRecently(t *testing.T) {
+	s.SetUpTest()
+	defer s.TearDownTest()
+
+	ns1Name := helpers.String(10)
+
+	s1 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s1.UpdatedAt = time.Now().Add(time.Duration(-(constants.ReloadServicesIntervalMins + 25)) * time.Minute)
+
+	s2 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s2.UpdatedAt = time.Now().Add(time.Duration(-150) * time.Minute)
+
+	s3 := helpers.GenerateDummyServiceForNamespace(ns1Name, 1)
+	s3.UpdatedAt = time.Now().Add(time.Duration(-150) * time.Minute)
+
+	insertItems(s.repo, s1, s2, s3)
+
+	errsChan := make(chan error, 10)
+
+	RemoveStaleServices(s.repo, errsChan)
+
+	select {
+	case <-errsChan:
+		t.Errorf("Should not get an error")
+	default:
+	}
+
+	services := findAllServices(s.repo)
+
+	require.Equal(t, 3, len(services), "Expecting all services remaining.")
+
+}
+
 func findNamespace(name string, repo *MongoRepository) model.Namespace {
 	var n model.Namespace
 	s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{"name": name}).One(&n)

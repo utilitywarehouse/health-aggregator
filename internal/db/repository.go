@@ -69,6 +69,8 @@ func (k K8sServicesConfigUpdater) UpsertServiceConfigs() {
 	for s := range k.Services {
 		collection := k.Repo.Db().C(constants.ServicesCollection)
 
+		s.UpdatedAt = time.Now().UTC()
+
 		_, err := collection.Upsert(bson.M{"name": s.Name, "namespace": s.Namespace}, s)
 		if err != nil {
 			log.WithError(err).Errorf("failed to insert service %s in namespace %s", s.Name, s.Namespace)
@@ -389,6 +391,40 @@ func DeleteHealthchecksOlderThan(removeAfterDays int, mgoRepo *MongoRepository) 
 	return nil
 }
 
+// RemoveServicesNotReloadedRecently deletes services with a non-recent updatedAt age
+func RemoveServicesNotReloadedRecently(mgoRepo *MongoRepository) error {
+
+	collection := mgoRepo.Db().C(constants.ServicesCollection)
+
+	now := time.Now().UTC()
+
+	safetyMarginMinutes := 20
+	latestRefreshCompletedTime := now.Add(time.Duration(-(constants.ReloadServicesIntervalMins + safetyMarginMinutes)) * time.Minute)
+
+	recentlyUpdated, err := collection.Find(bson.M{"updatedAt": bson.M{"$gt": latestRefreshCompletedTime}}).Count()
+	if err != nil {
+		return errors.Wrap(err, "failed to count recently updated services")
+	}
+	log.Infof("found %d recently updated services", recentlyUpdated)
+
+	// we don't want to delete services if the most recent reload did not succeed
+	if recentlyUpdated > 0 {
+		log.Infof("%d services were updated recently - deleting stale services", recentlyUpdated)
+
+		deleteStaleServicesAfterMinutes := (2 * constants.ReloadServicesIntervalMins) + safetyMarginMinutes
+		deleteStaleServicesSinceTime := now.Add(time.Duration(-deleteStaleServicesAfterMinutes) * time.Minute)
+
+		if _, err := collection.RemoveAll(bson.M{"updatedAt": bson.M{"$lt": deleteStaleServicesSinceTime}}); err != nil {
+			return errors.Wrap(err, "failed to remove stale services")
+		}
+		log.Info("services deleted successfully")
+	} else {
+		log.Warn("no services were updated recently - skipping delete stale services")
+	}
+
+	return nil
+}
+
 // DropDB drops the database
 func DropDB(mgoRepo *MongoRepository) error {
 	return mgoRepo.Db().DropDatabase()
@@ -423,6 +459,20 @@ func RemoveChecksOlderThan(removeAfterDays int, mgoRepo *MongoRepository, errs c
 	if err != nil {
 		select {
 		case errs <- fmt.Errorf("Could not delete old healthchecks (%v)", err):
+		default:
+		}
+		return
+	}
+}
+
+// RemoveStaleServices deletes services that have not been reloaded in the last 150 minutes
+// If they have not been reloaded (which happens every 1hr) then they were likely removed
+// from k8s
+func RemoveStaleServices(mgoRepo *MongoRepository, errs chan error) {
+	err := RemoveServicesNotReloadedRecently(mgoRepo)
+	if err != nil {
+		select {
+		case errs <- fmt.Errorf("Could not remove stale services (%v)", err):
 		default:
 		}
 		return

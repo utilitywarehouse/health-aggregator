@@ -10,6 +10,7 @@ type Service struct {
 	HealthAnnotations HealthAnnotations `json:"healthAnnotations" bson:"healthAnnotations"`
 	AppPort           string            `json:"appPort" bson:"appPort"`
 	Deployment        Deployment        `json:"deployment" bson:"deployment"`
+	UpdatedAt         time.Time         `json:"-" bson:"updatedAt"`
 }
 
 // Pod describes a k8s pod

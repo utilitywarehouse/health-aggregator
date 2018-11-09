@@ -36,4 +36,7 @@ const (
 	Healthy = "healthy"
 	// Degraded reprents the degraded state from the UW operational health endpoint spec
 	Degraded = "degraded"
+	// ReloadServicesIntervalMins determines how often to attempt refreshing service
+	// configurations from k8s
+	ReloadServicesIntervalMins = 60
 )

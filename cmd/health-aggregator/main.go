@@ -146,12 +146,21 @@ func main() {
 		go discoveryService.ReloadServiceConfigs(reloadQueue, mgoRepo)
 
 		// Place a new request (UUID) onto the reload queue every 60 minutes.
-		reloadTicker := time.NewTicker(60 * time.Minute)
+		reloadTicker := time.NewTicker(constants.ReloadServicesIntervalMins * time.Minute)
 		go func() {
 			for t := range reloadTicker.C {
 
 				log.Infof("scheduling reload of k8s annotations at %v", t)
 				reloadQueue <- uuid.Must(uuid.NewV4())
+			}
+		}()
+
+		// Schedule deletion services that were not updated in recent reloads
+		serviceTidyTicker := time.NewTicker((constants.ReloadServicesIntervalMins) * time.Minute)
+		go func() {
+			for t := range serviceTidyTicker.C {
+				log.Infof("tidying stale services %v", t)
+				db.RemoveStaleServices(mgoRepo, errs)
 			}
 		}()
 
