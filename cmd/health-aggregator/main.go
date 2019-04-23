@@ -12,9 +12,9 @@ import (
 	h "github.com/gorilla/handlers"
 
 	"github.com/globalsign/mgo"
+	"github.com/google/uuid"
 	"github.com/jawher/mow.cli"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
 	"github.com/utilitywarehouse/go-operational/op"
@@ -151,7 +151,7 @@ func main() {
 			for t := range reloadTicker.C {
 
 				log.Infof("scheduling reload of k8s annotations at %v", t)
-				reloadQueue <- uuid.Must(uuid.NewV4())
+				reloadQueue <- uuid.New()
 			}
 		}()
 
