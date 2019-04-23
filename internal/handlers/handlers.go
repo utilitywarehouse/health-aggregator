@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/db"
 )
@@ -30,8 +30,8 @@ func withRepoCopy(mgoRepo *db.MongoRepository, next func(mgoRepo *db.MongoReposi
 
 func reloader(reloadQueue chan uuid.UUID) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		reqID := uuid.Must(uuid.NewV4())
-		reloadQueue <- uuid.Must(uuid.NewV4())
+		reqID := uuid.New()
+		reloadQueue <- uuid.New()
 		responseWithJSON(w, http.StatusOK, map[string]string{"message": "reload request received for id " + reqID.String()})
 	}
 }

@@ -40,7 +40,7 @@ func Test_OverrideParentAnnotations(t *testing.T) {
 func Test_GetHealthAnnotations(t *testing.T) {
 	client := setUpTest(t)
 
-	ns, err := client.Core().Namespaces().Get("energy", metav1.GetOptions{})
+	ns, err := client.CoreV1().Namespaces().Get("energy", metav1.GetOptions{})
 	if err != nil {
 		assert.Fail(t, "Error getting namespace.")
 	}
@@ -53,7 +53,7 @@ func Test_GetHealthAnnotations(t *testing.T) {
 	assert.Equal(t, "true", retrievedAnnotations.EnableScrape)
 	assert.Equal(t, "8080", retrievedAnnotations.Port)
 
-	s, err := client.Core().Services("energy").Get("test-service", metav1.GetOptions{})
+	s, err := client.CoreV1().Services("energy").Get("test-service", metav1.GetOptions{})
 	if err != nil {
 		assert.Fail(t, "Error getting service.")
 	}
@@ -111,10 +111,10 @@ func setUpTest(t *testing.T) *fake.Clientset {
 
 	client := fake.NewSimpleClientset()
 
-	_, nsErr := client.Core().Namespaces().Create(testNamespace)
+	_, nsErr := client.CoreV1().Namespaces().Create(testNamespace)
 	require.NoError(t, nsErr)
 
-	_, sErr := client.Core().Services(testNamespace.Name).Create(testService)
+	_, sErr := client.CoreV1().Services(testNamespace.Name).Create(testService)
 	require.NoError(t, sErr)
 
 	return client

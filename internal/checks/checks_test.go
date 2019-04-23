@@ -290,10 +290,10 @@ func setUpNamespaceWithService(t *testing.T, namespaceName string, desiredReplic
 
 	client := fake.NewSimpleClientset()
 
-	_, nsErr := client.Core().Namespaces().Create(testNamespace)
+	_, nsErr := client.CoreV1().Namespaces().Create(testNamespace)
 	require.NoError(t, nsErr)
 
-	_, sErr := client.Core().Services(testNamespace.Name).Create(testService)
+	_, sErr := client.CoreV1().Services(testNamespace.Name).Create(testService)
 	require.NoError(t, sErr)
 
 	return client, svc
