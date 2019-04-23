@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
 	"github.com/utilitywarehouse/health-aggregator/internal/db"
@@ -190,7 +190,7 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 	log.Info("loading namespace and service annotations")
 	defaultAnnotations := model.HealthAnnotations{EnableScrape: constants.DefaultEnableScrape, Port: constants.DefaultPort}
 
-	namespaces, err := d.K8sClient.Core().Namespaces().List(metav1.ListOptions{})
+	namespaces, err := d.K8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		select {
 		case d.Errors <- fmt.Errorf("Could not get namespaces via kubernetes api 1: (%v)", err):
@@ -218,7 +218,7 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 
 		log.Debugf("Added namespace %v to channel\n", n.Name)
 
-		services, err := d.K8sClient.Core().Services(n.Name).List(metav1.ListOptions{})
+		services, err := d.K8sClient.CoreV1().Services(n.Name).List(metav1.ListOptions{})
 		if err != nil {
 			select {
 			case d.Errors <- fmt.Errorf("Could not get services via kubernetes api: (%v)", err):

@@ -13,7 +13,7 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
@@ -46,7 +46,7 @@ func (s *TestSuite) SetUpTest() {
 		log.Fatalf("failed to create mongo session: %s", err.Error())
 	}
 	s.session = sess
-	s.dbName = uuid.New()
+	s.dbName = uuid.New().String()
 	s.repo = NewMongoRepository(s.session, s.dbName)
 }
 
