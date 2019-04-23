@@ -1,6 +1,8 @@
 version: 2
 jobs:
   test: &test
+    environment:
+      GO111MODULE: on
     working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
     docker:
     - image: circleci/golang:1.11
