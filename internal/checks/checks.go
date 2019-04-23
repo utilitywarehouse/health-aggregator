@@ -76,10 +76,6 @@ func (c *HealthChecker) DoHealthchecks(healthchecks chan model.Service, statusRe
 					case errs <- fmt.Errorf(errText):
 					default:
 					}
-					select {
-					case statusResponses <- model.ServiceStatus{Service: svc, CheckTime: time.Now().UTC(), AggregatedState: constants.Unhealthy, Error: errText}:
-					default:
-					}
 					inFlightChecksGaugeVec.With(map[string]string{}).Dec()
 					continue
 				}
