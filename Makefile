@@ -12,6 +12,9 @@ K8S_NAMESPACE=$(DOCKER_REPOSITORY_NAMESPACE)
 K8S_DEPLOYMENT_NAME=$(DOCKER_REPOSITORY_IMAGE)
 K8S_CONTAINER_NAME=$(K8S_DEPLOYMENT_NAME)
 
+GOLANGCI_LINT_CONFIG_URL := https://raw.githubusercontent.com/utilitywarehouse/partner-go-build/master/.golangci.yml
+GOLANGCI_LINT_CONFIG_PATH := .golangci.yml
+
 BUILDENV :=
 BUILDENV += CGO_ENABLED=0
 GIT_HASH := $(CIRCLE_SHA1)
@@ -21,27 +24,16 @@ endif
 LINKFLAGS :=-s -X main.gitHash=$(GIT_HASH) -extldflags "-static"
 TESTFLAGS := -v -cover
 
-GOLANGCI_LINT_CONFIG_URL := https://raw.githubusercontent.com/utilitywarehouse/partner-go-build/master/.golangci.yml
-GOLANGCI_LINT_CONFIG_PATH := .golangci.yml
-
 EMPTY :=
 SPACE := $(EMPTY) $(EMPTY)
 join-with = $(subst $(SPACE),$1,$(strip $2))
-
-LEXC :=
-ifdef LINT_EXCLUDE
-	LEXC := $(call join-with,|,$(LINT_EXCLUDE))
-endif
 
 .PHONY: install
 install:
 	GO111MODULE=on go get -v -t -d ./...
 
-$(LINTER):
-	GO111MODULE=on go get -u golangci/golangci-lint
-	$(LINTER) --install
-
-lint: ## run the linter
+lint:
+	GO111MODULE=on go get -u github.com/golangci/golangci-lint && \
 	curl -o $(GOLANGCI_LINT_CONFIG_PATH) -s $(GOLANGCI_LINT_CONFIG_URL) && \
 	golangci-lint run --deadline=2m --config=$(GOLANGCI_LINT_CONFIG_PATH)
 

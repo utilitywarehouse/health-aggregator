@@ -9,6 +9,7 @@ require (
 	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 	github.com/go-redis/redis v6.15.6+incompatible // indirect
 	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/golangci/golangci-lint v1.23.1 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.3.1 // indirect
@@ -42,7 +43,6 @@ require (
 	gopkg.in/alecthomas/kingpin.v3-unstable v3.0.0-20191105091915-95d230a53780 // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.4.0 // indirect
 	gopkg.in/olivere/elastic.v5 v5.0.84 // indirect
-	gopkg.in/yaml.v2 v2.2.7 // indirect
 	k8s.io/api v0.17.1
 	k8s.io/apimachinery v0.17.1
 	k8s.io/client-go v0.17.0
