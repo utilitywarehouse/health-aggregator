@@ -38,7 +38,7 @@ install:
 	GO111MODULE=on go get -v -t -d ./...
 
 $(LINTER):
-	go get -u gopkg.in/alecthomas/$(LINTER_EXE)
+	GO111MODULE=on go get -u gopkg.in/alecthomas/$(LINTER_EXE)
 	$(LINTER) --install
 
 .PHONY: lint
