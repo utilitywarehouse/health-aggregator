@@ -113,7 +113,7 @@ func Test_GetHealthchecks(t *testing.T) {
 
 	<-done
 
-	var returnedServices []model.Service
+	returnedServices := []model.Service{}
 
 	for check := range healthchecksNS1 {
 		returnedServices = append(returnedServices, check)

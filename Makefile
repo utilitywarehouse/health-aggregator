@@ -20,9 +20,9 @@ ifeq ($(GIT_HASH),)
 endif
 LINKFLAGS :=-s -X main.gitHash=$(GIT_HASH) -extldflags "-static"
 TESTFLAGS := -v -cover
-LINT_FLAGS :=--disable-all --enable=vet --enable=vetshadow --enable=golint --enable=ineffassign --enable=goconst --enable=gofmt
-LINTER_EXE := gometalinter.v1
-LINTER := $(GOPATH)/bin/$(LINTER_EXE)
+
+GOLANGCI_LINT_CONFIG_URL := https://raw.githubusercontent.com/utilitywarehouse/partner-go-build/master/.golangci.yml
+GOLANGCI_LINT_CONFIG_PATH := .golangci.yml
 
 EMPTY :=
 SPACE := $(EMPTY) $(EMPTY)
@@ -38,16 +38,12 @@ install:
 	GO111MODULE=on go get -v -t -d ./...
 
 $(LINTER):
-	GO111MODULE=on go get -u gopkg.in/alecthomas/$(LINTER_EXE)
+	GO111MODULE=on go get -u golangci/golangci-lint
 	$(LINTER) --install
 
-.PHONY: lint
-lint: $(LINTER)
-ifdef LEXC
-	$(LINTER) --exclude '$(LEXC)' $(LINT_FLAGS) ./...
-else
-	$(LINTER) $(LINT_FLAGS) ./...
-endif
+lint: ## run the linter
+	curl -o $(GOLANGCI_LINT_CONFIG_PATH) -s $(GOLANGCI_LINT_CONFIG_URL) && \
+	golangci-lint run --deadline=2m --config=$(GOLANGCI_LINT_CONFIG_PATH)
 
 .PHONY: clean
 clean:

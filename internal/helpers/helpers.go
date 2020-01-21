@@ -55,7 +55,7 @@ func GenerateDummyServiceStatus(serviceName string, namespaceName string, podNam
 	healthCheck.CheckTime = time.Now().UTC()
 
 	// PodChecks
-	var podChecks []model.PodHealthResponse
+	podChecks := []model.PodHealthResponse{}
 	for _, podName := range podNames {
 		var podHealthResponse model.PodHealthResponse
 		podHealthResponse = generateDummyPodHealthResponse(podName, state...)
@@ -133,7 +133,7 @@ func generateDummyHealthcheckBody(state ...string) model.HealthcheckBody {
 	checkBody.Description = "Check Description " + String(10)
 	checkBody.Health = health
 
-	var checks []model.Check
+	checks := []model.Check{}
 	for i := 0; i < 3; i++ {
 		chk := model.Check{
 			Name:   "Check name " + String(10),
