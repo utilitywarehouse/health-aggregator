@@ -3,7 +3,7 @@ jobs:
   test: &test
     working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.13
     - image: mongo:3.6
     steps:
       - checkout
@@ -28,7 +28,7 @@ jobs:
   build-intermediate:
     working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.13
     steps:
       - setup_remote_docker:
           version: 17.06.0-ce
@@ -39,7 +39,7 @@ jobs:
   build-latest:
     working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
     docker:
-    - image: circleci/golang:1.10
+    - image: circleci/golang:1.13
     steps:
       - setup_remote_docker:
           version: 17.06.0-ce
