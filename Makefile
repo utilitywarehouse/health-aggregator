@@ -35,7 +35,7 @@ endif
 
 .PHONY: install
 install:
-	go get -v -t -d ./...
+	GO111MODULE=on go get -v -t -d ./...
 
 $(LINTER):
 	go get -u gopkg.in/alecthomas/$(LINTER_EXE)

@@ -266,7 +266,7 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 }
 
 func (d *KubeDiscoveryService) getDeployments(namespaceName string) (map[string]model.Deployment, error) {
-	deploymentList, err := d.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
+	deploymentList, err := d.K8sClient.AppsV1().Deployments(namespaceName).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
 	}
