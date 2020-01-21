@@ -12,9 +12,6 @@ K8S_NAMESPACE=$(DOCKER_REPOSITORY_NAMESPACE)
 K8S_DEPLOYMENT_NAME=$(DOCKER_REPOSITORY_IMAGE)
 K8S_CONTAINER_NAME=$(K8S_DEPLOYMENT_NAME)
 
-GOLANGCI_LINT_CONFIG_URL := https://raw.githubusercontent.com/utilitywarehouse/partner-go-build/master/.golangci.yml
-GOLANGCI_LINT_CONFIG_PATH := .golangci.yml
-
 BUILDENV :=
 BUILDENV += CGO_ENABLED=0
 GIT_HASH := $(CIRCLE_SHA1)
@@ -32,11 +29,6 @@ join-with = $(subst $(SPACE),$1,$(strip $2))
 install:
 	GO111MODULE=on go get -v -t -d ./...
 
-lint:
-	GO111MODULE=on go get -u github.com/golangci/golangci-lint && \
-	curl -o $(GOLANGCI_LINT_CONFIG_PATH) -s $(GOLANGCI_LINT_CONFIG_URL) && \
-	golangci-lint run --deadline=2m --config=$(GOLANGCI_LINT_CONFIG_PATH)
-
 .PHONY: clean
 clean:
 	rm -f $(SERVICE)
@@ -52,7 +44,7 @@ test:
 	$(BUILDENV) go test $(TESTFLAGS) ./...
 
 .PHONY: all
-all: clean $(LINTER) lint test build
+all: clean test build
 
 docker-image:
 	docker build -t $(DOCKER_REPOSITORY):local . --build-arg SERVICE=$(SERVICE) --build-arg GITHUB_TOKEN=$(GITHUB_TOKEN)
