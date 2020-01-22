@@ -51,7 +51,9 @@ func (s *TestSuite) SetUpTest() {
 }
 
 func (s *TestSuite) TearDownTest() {
-	s.session.DB(s.dbName).DropDatabase()
+	if err := s.session.DB(s.dbName).DropDatabase(); err != nil {
+		log.Fatalf("failed to drop database, err: %v", err)
+	}
 	s.repo.Close()
 }
 
@@ -113,7 +115,7 @@ func Test_GetHealthchecks(t *testing.T) {
 
 	<-done
 
-	var returnedServices []model.Service
+	returnedServices := []model.Service{}
 
 	for check := range healthchecksNS1 {
 		returnedServices = append(returnedServices, check)
@@ -355,8 +357,8 @@ func Test_UpsertServiceConfigs(t *testing.T) {
 	// Wait for signal to show upsert complete
 	<-done
 
-	svc1 := findService(s1Name, ns1Name, s.repo)
-	svc2 := findService(s2Name, ns1Name, s.repo)
+	svc1 := findService(s1Name, ns1Name)
+	svc2 := findService(s2Name, ns1Name)
 
 	// Service 1 asserts
 	assert.Equal(t, updatedS1.HealthAnnotations.EnableScrape, svc1.HealthAnnotations.EnableScrape)
@@ -414,8 +416,8 @@ func Test_UpsertNamespaceConfigs(t *testing.T) {
 	k := NewK8sNamespacesConfigUpdater(namespacesChan, s.repo.WithNewSession())
 	k.UpsertNamespaceConfigs()
 
-	ns1 := findNamespace(ns1Name, s.repo)
-	ns2 := findNamespace(ns2Name, s.repo)
+	ns1 := findNamespace(ns1Name)
+	ns2 := findNamespace(ns2Name)
 
 	// Service 1 asserts
 	assert.Equal(t, updatedNS1.HealthAnnotations.EnableScrape, ns1.HealthAnnotations.EnableScrape)
@@ -463,7 +465,7 @@ func Test_InsertHealthcheckResponses(t *testing.T) {
 
 	<-done
 
-	retrievedChecks := findAllServiceStatuses(s.repo)
+	retrievedChecks := findAllServiceStatuses()
 	assert.NoError(t, helpers.TestServiceStatusesEquality([]model.ServiceStatus{check1, check2, check3}, retrievedChecks))
 
 	close(errsChan)
@@ -501,7 +503,7 @@ func Test_RemoveChecksOlderThan(t *testing.T) {
 	}
 
 	<-done
-	remainingChecks := findAllServiceStatuses(s.repo)
+	remainingChecks := findAllServiceStatuses()
 
 	require.Equal(t, 1, len(remainingChecks))
 	assert.Equal(t, newCheck.Error, remainingChecks[0].Error)
@@ -522,9 +524,9 @@ func Test_DropDB(t *testing.T) {
 	err := DropDB(s.repo)
 	require.NoError(t, err)
 
-	assert.True(t, len(findAllServiceStatuses(s.repo)) == 0)
-	assert.True(t, len(findAllNamespaces(s.repo)) == 0)
-	assert.True(t, len(findAllServices(s.repo)) == 0)
+	assert.True(t, len(findAllServiceStatuses()) == 0)
+	assert.True(t, len(findAllNamespaces()) == 0)
+	assert.True(t, len(findAllServices()) == 0)
 }
 
 func Test_ProcessDeployment(t *testing.T) {
@@ -555,13 +557,13 @@ func Test_ProcessDeployment(t *testing.T) {
 	updateItem3 := model.UpdateItem{Type: "DELETED", Object: service3UpdatedDeployment}
 
 	updater.processDeployment(updateItem1)
-	assert.Equal(t, int32(2), findService(service1.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(2), findService(service1.Name, nsName).Deployment.DesiredReplicas)
 
 	updater.processDeployment(updateItem2)
-	assert.Equal(t, int32(4), findService(service2.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(4), findService(service2.Name, nsName).Deployment.DesiredReplicas)
 
 	updater.processDeployment(updateItem3)
-	assert.Equal(t, int32(0), findService(service3.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(0), findService(service3.Name, nsName).Deployment.DesiredReplicas)
 }
 
 func Test_DoUpdates(t *testing.T) {
@@ -612,9 +614,9 @@ func Test_DoUpdates(t *testing.T) {
 
 	<-done
 
-	assert.Equal(t, int32(2), findService(service1.Name, nsName, repo).Deployment.DesiredReplicas)
-	assert.Equal(t, int32(4), findService(service2.Name, nsName, repo).Deployment.DesiredReplicas)
-	assert.Equal(t, int32(0), findService(service3.Name, nsName, repo).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(2), findService(service1.Name, nsName).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(4), findService(service2.Name, nsName).Deployment.DesiredReplicas)
+	assert.Equal(t, int32(0), findService(service3.Name, nsName).Deployment.DesiredReplicas)
 }
 
 func Test_DoUpdatesUnsupportedObject(t *testing.T) {
@@ -674,7 +676,7 @@ func Test_DeleteStaleServices(t *testing.T) {
 	default:
 	}
 
-	services := findAllServices(s.repo)
+	services := findAllServices()
 
 	require.Equal(t, 1, len(services), "Expecting only one service remaining.")
 
@@ -711,40 +713,50 @@ func Test_DeleteStaleServicesNoServicesUpdatedRecently(t *testing.T) {
 	default:
 	}
 
-	services := findAllServices(s.repo)
+	services := findAllServices()
 
 	require.Equal(t, 3, len(services), "Expecting all services remaining.")
 
 }
 
-func findNamespace(name string, repo *MongoRepository) model.Namespace {
+func findNamespace(name string) model.Namespace {
 	var n model.Namespace
-	s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{"name": name}).One(&n)
+	if err := s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{"name": name}).One(&n); err != nil {
+		log.Fatalf("failed to return namespace, err: %v", err)
+	}
 	return n
 }
 
-func findAllNamespaces(repo *MongoRepository) []model.Namespace {
+func findAllNamespaces() []model.Namespace {
 	var nsList []model.Namespace
-	s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{}).All(&nsList)
+	if err := s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{}).All(&nsList); err != nil {
+		log.Fatalf("failed to find all namespaces, err: %v", err)
+	}
 	return nsList
 }
 
-func findService(name string, namespace string, repo *MongoRepository) model.Service {
+func findService(name string, namespace string) model.Service {
 	var svc model.Service
-	s.repo.Db().C(constants.ServicesCollection).Find(bson.M{"namespace": namespace, "name": name}).One(&svc)
+	if err := s.repo.Db().C(constants.ServicesCollection).Find(bson.M{"namespace": namespace, "name": name}).One(&svc); err != nil {
+		log.Fatalf("failed to find service, err: %v", err)
+	}
 	return svc
 }
 
-func findAllServices(repo *MongoRepository) []model.Service {
+func findAllServices() []model.Service {
 	var sList []model.Service
-	s.repo.Db().C(constants.ServicesCollection).Find(bson.M{}).All(&sList)
+	if err := s.repo.Db().C(constants.ServicesCollection).Find(bson.M{}).All(&sList); err != nil {
+		log.Fatalf("failed to find all services, err: %v", err)
+	}
 	return sList
 }
 
-func findAllServiceStatuses(repo *MongoRepository) []model.ServiceStatus {
+func findAllServiceStatuses() []model.ServiceStatus {
 	var checks []model.ServiceStatus
-	collection := repo.Db().C(constants.HealthchecksCollection)
-	collection.Find(bson.M{}).All(&checks)
+	collection := s.repo.Db().C(constants.HealthchecksCollection)
+	if err := collection.Find(bson.M{}).All(&checks); err != nil {
+		log.Fatalf("failed to find all service statuses, err: %v", err)
+	}
 
 	return checks
 }
@@ -760,15 +772,12 @@ func insertItem(mgoRepo *MongoRepository, obj interface{}) {
 	var collection string
 	switch v := obj.(type) {
 	case model.Service:
-		obj = obj.(model.Service)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.ServicesCollection
 	case model.Namespace:
-		obj = obj.(model.Namespace)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.NamespacesCollection
 	case model.ServiceStatus:
-		obj = obj.(model.ServiceStatus)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.HealthchecksCollection
 	default:

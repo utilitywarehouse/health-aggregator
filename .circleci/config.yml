@@ -1,89 +1,29 @@
 version: 2
+
 jobs:
-  test: &test
-    working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
+  build:
+    working_directory: /build
     docker:
-    - image: circleci/golang:1.10
-    - image: mongo:3.6
+      - image: quay.io/utilitywarehouse/partner-go-build
+      - image: mongo:3.6
+        command: mongod --port 27017
     steps:
-      - checkout
-      - run:
-          name: Wait for db
-          command: dockerize -wait tcp://localhost:27017 -timeout 1m
-      - attach_workspace:
-          at: ~/go/src/github.com/utilitywarehouse/health-aggregator
+      - checkout:
+          path: /build/project
       - run: git config --global url."https://$GITHUB_TOKEN:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+      - run: git config --global --add url."https://$GITHUB_TOKEN:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+      - run: cd project
       - run: make install
-      - run:
-          name: Wait for db
-          command: dockerize -wait tcp://localhost:27017 -timeout 1m
-      - run: make lint test
-      - persist_to_workspace:
-          root: .
-          paths: .
-
-  test-master:
-    <<: *test
-
-  build-intermediate:
-    working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
-    docker:
-    - image: circleci/golang:1.9
-    steps:
+      - run: make lint
+      - run: make test
       - setup_remote_docker:
           version: 17.06.0-ce
-      - attach_workspace:
-          at: .
-      - run: make ci-docker-create-intermediate
-
-  build-latest:
-    working_directory: /go/src/github.com/utilitywarehouse/health-aggregator
-    docker:
-    - image: circleci/golang:1.10
-    steps:
-      - setup_remote_docker:
-          version: 17.06.0-ce
-      - attach_workspace:
-          at: .
-      - run: make ci-docker-create-latest
-
-  deploy-to-kube:
-    environment:
-      SERVICE: health-aggregator
-      NAMESPACE: health-aggregator
-      UW_DOCKER_REGISTRY: registry.uw.systems
-      DEPLOYMENT: health-aggregator
-      CONTAINER: health-aggregator
-    docker:
-      - image: $UW_DOCKER_REGISTRY/tools/kube-deploy:latest
-        auth:
-          username: $DOCKER_ID
-          password: $DOCKER_PASSWORD
-    steps:
-        - run:
-            command: TAG=$CIRCLE_SHA1 IMAGE=$UW_DOCKER_REGISTRY/$NAMESPACE/$SERVICE /run.sh
+      - run: make docker-build-all
+      - run: make docker-push-all
 
 workflows:
   version: 2
-  development:
+  build:
     jobs:
-      - test:
-          filters:
-            branches:
-              ignore: master
-      - build-intermediate:
-          requires:
-            - test
-  deployment:
-    jobs:
-      - test-master:
-          filters:
-            branches:
-              only:
-                - master
-      - build-latest:
-          requires:
-            - test-master
-      - deploy-to-kube:
-          requires:
-            - build-latest
+      - build:
+          context: partner

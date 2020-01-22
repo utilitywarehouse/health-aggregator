@@ -19,7 +19,7 @@ A service aggregating health endpoint information from our kubernetes cluster.
 
 Health Aggregator requires the following to run:
 
-* [Golang][golang] 1.9+
+* [Golang][golang] 1.13+
 * [Docker][docker]
 
 ## Usage
@@ -30,10 +30,11 @@ From the root directory, go get all dependencies:
 go get ./...
 ```
 
-Build, test and install:
+Build and test:
 
 ```sh
-make all
+make fast
+make test
 ```
 
 ### Running in cluster

@@ -13,7 +13,7 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/google/uuid"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
@@ -215,7 +215,10 @@ func main() {
 
 		graceful(server, 10)
 	}
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func newMongoSession(dbURL string) *mgo.Session {
@@ -287,7 +290,7 @@ func createIndex(mgoRepo *db.MongoRepository) {
 	log.Debug("index creation successful")
 }
 
-func initOpsHTTPServer(opsPort int, mgoSess *mgo.Session, metrics instrumentation.Metrics) {
+func initOpsHTTPServer(opsPort int, mgoSess healthcheck.MongoPingRefresh, metrics instrumentation.Metrics) {
 	log.Info("starting ops server")
 
 	promMetrics := []prometheus.Collector{}

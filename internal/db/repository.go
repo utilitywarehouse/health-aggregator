@@ -353,7 +353,7 @@ func FindLatestChecksForNamespace(mgoRepo *MongoRepository, n string) ([]model.S
 		return nil, fmt.Errorf("Unable to get checks, err: %v", err)
 	}
 
-	var serviceNamesToReturn []string
+	serviceNamesToReturn := []string{}
 	for _, svc := range servicesToReturn {
 		serviceNamesToReturn = append(serviceNamesToReturn, svc.Name)
 	}

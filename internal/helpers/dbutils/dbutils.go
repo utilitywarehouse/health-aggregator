@@ -23,15 +23,12 @@ func InsertItem(mgoRepo *db.MongoRepository, obj interface{}) {
 	var collection string
 	switch v := obj.(type) {
 	case model.Service:
-		obj = obj.(model.Service)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.ServicesCollection
 	case model.Namespace:
-		obj = obj.(model.Namespace)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.NamespacesCollection
 	case model.ServiceStatus:
-		obj = obj.(model.ServiceStatus)
 		objType = fmt.Sprintf("%T", v)
 		collection = constants.HealthchecksCollection
 	default:

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -30,7 +31,7 @@ type KubeDiscoveryService struct {
 }
 
 // NewKubeDiscoveryService created a new
-func NewKubeDiscoveryService(kubeClient *kubernetes.Clientset, state map[model.ServicesStateKey]model.Service, updatesQueue chan model.UpdateItem, errs chan error) *KubeDiscoveryService {
+func NewKubeDiscoveryService(kubeClient kubernetes.Interface, state map[model.ServicesStateKey]model.Service, updatesQueue chan model.UpdateItem, errs chan error) *KubeDiscoveryService {
 	namespaces := make(chan model.Namespace, 10)
 	services := make(chan model.Service, 10)
 	watchEvents := make(chan model.UpdateItem, 10)
@@ -79,13 +80,13 @@ func (d *KubeDiscoveryService) ReloadServiceConfigs(reloadQueue chan uuid.UUID, 
 func (d *KubeDiscoveryService) UpdateDeployments() {
 
 	for watchEvent := range d.K8sWatchEvents {
-		if string(watchEvent.Type) == string(watch.Error) {
+		if watchEvent.Type == string(watch.Error) {
 			log.Errorf("k8s watch event returned error")
 			continue
 		}
 		switch v := watchEvent.Object.(type) {
 		case model.Deployment:
-			d.UpdatesQueue <- model.UpdateItem{Type: string(watchEvent.Type), Object: v}
+			d.UpdatesQueue <- model.UpdateItem{Type: watchEvent.Type, Object: v}
 		default:
 			log.Debugf("unsupported type %T!\n", v)
 		}
@@ -250,7 +251,11 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 			}
 			serviceAnnotations = overrideParentAnnotations(serviceAnnotations, namespaceAnnotations)
 
-			appPort := getAppPortForService(&svc, serviceAnnotations.Port)
+			appPort, err := getAppPortForService(&svc, serviceAnnotations.Port)
+			if err != nil {
+				log.Errorf("failed to get app port for service %s, err: %v", svc.Name, err)
+				continue
+			}
 
 			d.Services <- model.Service{
 				Name:              svc.Name,
@@ -266,7 +271,7 @@ func (d *KubeDiscoveryService) GetClusterHealthcheckConfig() {
 }
 
 func (d *KubeDiscoveryService) getDeployments(namespaceName string) (map[string]model.Deployment, error) {
-	deploymentList, err := d.K8sClient.ExtensionsV1beta1().Deployments(namespaceName).List(metav1.ListOptions{})
+	deploymentList, err := d.K8sClient.AppsV1().Deployments(namespaceName).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve deployments: %v", err.Error())
 	}
@@ -284,9 +289,12 @@ func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error
 
 	switch k8sObject.(type) {
 	case corev1.Namespace:
-		ns := k8sObject.(corev1.Namespace)
-		annotations := ns.Annotations
 		var h model.HealthAnnotations
+		ns, ok := k8sObject.(corev1.Namespace)
+		if !ok {
+			return h, errors.New("failed to cast k8sObject to corev1.Namespace")
+		}
+		annotations := ns.Annotations
 		for k, v := range annotations {
 			if k == "uw.health.aggregator.port" {
 				h.Port = v
@@ -299,9 +307,12 @@ func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error
 		}
 		return h, nil
 	case corev1.Service:
-		svc := k8sObject.(corev1.Service)
-		annotations := svc.Annotations
 		var h model.HealthAnnotations
+		svc, ok := k8sObject.(corev1.Service)
+		if !ok {
+			return h, errors.New("failed to cast k8sObject to corev1.Service")
+		}
+		annotations := svc.Annotations
 		for k, v := range annotations {
 			if k == "uw.health.aggregator.port" {
 				h.Port = v
@@ -329,18 +340,21 @@ func overrideParentAnnotations(h model.HealthAnnotations, overrides model.Health
 	return h
 }
 
-func getAppPortForService(k8sService *corev1.Service, serviceScrapePort string) string {
+func getAppPortForService(k8sService *corev1.Service, serviceScrapePort string) (string, error) {
 	servicePorts := k8sService.Spec.Ports
 	for _, port := range servicePorts {
-		scrapePort, _ := strconv.Atoi(serviceScrapePort)
+		scrapePort, err := strconv.Atoi(serviceScrapePort)
+		if err != nil {
+			return "", err
+		}
 		if port.Port == int32(scrapePort) {
 			if port.TargetPort.StrVal != "" {
-				return port.TargetPort.StrVal
+				return port.TargetPort.StrVal, nil
 			}
 			if port.TargetPort.IntVal != 0 {
-				return strconv.Itoa(int(port.TargetPort.IntVal))
+				return strconv.Itoa(int(port.TargetPort.IntVal)), nil
 			}
 		}
 	}
-	return serviceScrapePort
+	return serviceScrapePort, nil
 }

@@ -1,90 +1,73 @@
-mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
-base_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
+# --------------------------------------------------------------------------------------------------
+# Variables
+# --------------------------------------------------------------------------------------------------
+-include app.mk
 
-SERVICE ?= $(base_dir)
+GIT_SUMMARY := $(shell git describe --tags --dirty --always)
+GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+BUILD_STAMP := $(shell date -u '+%Y-%m-%dT%H:%M:%S%z')
+GOLANGCI_LINT_CONFIG_URL := https://raw.githubusercontent.com/utilitywarehouse/partner-go-build/master/.golangci.yml
+GOLANGCI_LINT_CONFIG_PATH := .golangci.yml
 
-DOCKER_REGISTRY=registry.uw.systems
-DOCKER_REPOSITORY_NAMESPACE=health-aggregator
-DOCKER_REPOSITORY_IMAGE=$(SERVICE)
-DOCKER_REPOSITORY=$(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY_NAMESPACE)/$(DOCKER_REPOSITORY_IMAGE)
+LDFLAGS := -ldflags ' \
+	-X "github.com/utilitywarehouse/partner-mono/pkg/meta.ApplicationName=$(APP_NAME)" \
+	-X "github.com/utilitywarehouse/partner-mono/pkg/meta.ApplicationDescription=$(APP_DESCRIPTION)" \
+	-X "github.com/utilitywarehouse/partner-mono/pkg/meta.GitSummary=$(GIT_SUMMARY)" \
+	-X "github.com/utilitywarehouse/partner-mono/pkg/meta.GitBranch=$(GIT_BRANCH)" \
+	-X "github.com/utilitywarehouse/partner-mono/pkg/meta.BuildStamp=$(BUILD_STAMP)"'
 
-K8S_NAMESPACE=$(DOCKER_REPOSITORY_NAMESPACE)
-K8S_DEPLOYMENT_NAME=$(DOCKER_REPOSITORY_IMAGE)
-K8S_CONTAINER_NAME=$(K8S_DEPLOYMENT_NAME)
+$(shell cp -n .env.example .env)
 
-BUILDENV :=
-BUILDENV += CGO_ENABLED=0
-GIT_HASH := $(CIRCLE_SHA1)
-ifeq ($(GIT_HASH),)
-  GIT_HASH := $(shell git rev-parse HEAD)
-endif
-LINKFLAGS :=-s -X main.gitHash=$(GIT_HASH) -extldflags "-static"
-TESTFLAGS := -v -cover
-LINT_FLAGS :=--disable-all --enable=vet --enable=vetshadow --enable=golint --enable=ineffassign --enable=goconst --enable=gofmt
-LINTER_EXE := gometalinter.v1
-LINTER := $(GOPATH)/bin/$(LINTER_EXE)
+.info: ## show project build metadata
+	@echo APP_NAME: $(APP_NAME)
+	@echo APP_DESCRIPTION: $(APP_DESCRIPTION)
+	@echo GIT_SUMMARY: $(GIT_SUMMARY)
+	@echo GIT_BRANCH: $(GIT_BRANCH)
+	@echo BUILD_STAMP: $(BUILD_STAMP)
+	@echo LDFLAGS: $(LDFLAGS)
 
-EMPTY :=
-SPACE := $(EMPTY) $(EMPTY)
-join-with = $(subst $(SPACE),$1,$(strip $2))
+.help: ## show help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-40s\033[0m %s\n", $$1, $$2}'
 
-LEXC :=
-ifdef LINT_EXCLUDE
-	LEXC := $(call join-with,|,$(LINT_EXCLUDE))
-endif
+# --------------------------------------------------------------------------------------------------
+# Application Tasks
+# --------------------------------------------------------------------------------------------------
 
-.PHONY: install
-install:
-	go get -v -t -d ./...
+fast: ## do a fast build
+	go build $(LDFLAGS)
 
-$(LINTER):
-	go get -u gopkg.in/alecthomas/$(LINTER_EXE)
-	$(LINTER) --install
-
-.PHONY: lint
-lint: $(LINTER)
-ifdef LEXC
-	$(LINTER) --exclude '$(LEXC)' $(LINT_FLAGS) ./...
-else
-	$(LINTER) $(LINT_FLAGS) ./...
-endif
-
-.PHONY: clean
-clean:
-	rm -f $(SERVICE)
-
-# builds our binary
-$(SERVICE):
-	$(BUILDENV) go build -o $(SERVICE)  -ldflags '$(LINKFLAGS)' ./cmd/$(SERVICE)
-
-build: $(SERVICE)
+ensure-protos: # placeholder
 
 .PHONY: test
-test:
-	$(BUILDENV) go test $(TESTFLAGS) ./...
+test: ## run tests on package and all subpackages
+	docker-compose up -d
+	go test $(LDFLAGS) -v -race ./...
 
-.PHONY: all
-all: clean $(LINTER) lint test build
+lint: ## run the linter
+	curl -o $(GOLANGCI_LINT_CONFIG_PATH) -s $(GOLANGCI_LINT_CONFIG_URL) && \
+	golangci-lint run --deadline=2m --config=$(GOLANGCI_LINT_CONFIG_PATH)
 
-docker-image:
-	docker build -t $(DOCKER_REPOSITORY):local . --build-arg SERVICE=$(SERVICE) --build-arg GITHUB_TOKEN=$(GITHUB_TOKEN)
+test-all: lint
 
-ci-docker-auth:
-	@echo "Logging in to $(DOCKER_REGISTRY) as $(DOCKER_ID)"
-	@docker login -u $(DOCKER_ID) -p $(DOCKER_PASSWORD) $(DOCKER_REGISTRY)
+clean: ## clean the build and test caches
+	go clean -testcache ./...
 
-ci-docker-build:
-	docker build -t $(DOCKER_REPOSITORY):$(CIRCLE_SHA1) . --build-arg SERVICE=$(SERVICE) --build-arg GITHUB_TOKEN=$(GITHUB_TOKEN)
+# --------------------------------------------------------------------------------------------------
+# Housekeeping - run this to update the metafiles/dotfiles/etc
+# --------------------------------------------------------------------------------------------------
 
-ci-docker-create-intermediate: ci-docker-auth ci-docker-build
-	docker push $(DOCKER_REPOSITORY)
+housekeeping: ## automatically update metafiles (Makefile.common.mk, .circleci/config.yml)
+	-rm -rf .tmp
+	mkdir .tmp
+	cd .tmp && \
+	git init && \
+	git config core.sparsecheckout true && \
+	echo repositories/go/ >> .git/info/sparse-checkout && \
+	git remote add origin git@github.com:utilitywarehouse/partner && \
+	git pull --depth=1 origin master
 
-ci-docker-create-latest: ci-docker-auth ci-docker-build
-	docker tag $(DOCKER_REPOSITORY):$(CIRCLE_SHA1) $(DOCKER_REPOSITORY):latest
-	docker push $(DOCKER_REPOSITORY)
+	-cp -n .tmp/repositories/go/app.mk app.mk
+	cp -r .tmp/repositories/go/.circleci/ .circleci/
+	cp .tmp/repositories/go/Makefile.common.mk Makefile.common.mk
 
-K8S_URL=https://elb.master.k8s.dev.uw.systems/apis/extensions/v1beta1/namespaces/$(K8S_NAMESPACE)/deployments/$(K8S_DEPLOYMENT_NAME)
-K8S_PAYLOAD={"spec":{"template":{"spec":{"containers":[{"name":"$(K8S_CONTAINER_NAME)","image":"$(DOCKER_REPOSITORY):$(CIRCLE_SHA1)"}]}}}}
-
-ci-kubernetes-push:
-	test "$(shell curl -o /dev/null -w '%{http_code}' -s -X PATCH -k -d '$(K8S_PAYLOAD)' -H 'Content-Type: application/strategic-merge-patch+json' -H 'Authorization: Bearer $(K8S_DEV_TOKEN)' '$(K8S_URL)')" -eq "200"
+	-rm -rf .tmp

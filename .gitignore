@@ -17,4 +17,4 @@
 .vscode/
 
 # The built golang binary
-./health-aggregator
+health-aggregator
