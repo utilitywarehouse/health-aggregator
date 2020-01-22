@@ -6,15 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/utilitywarehouse/health-aggregator/internal/helpers"
 	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
 
 	"github.com/stretchr/testify/require"
 	"github.com/utilitywarehouse/health-aggregator/internal/constants"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	namespaceName = "energy"
+	namespaceName       = "energy"
 	apiStub             *httptest.Server
 	healthyCheckReponse = `{
 		"name": "uw-foo",

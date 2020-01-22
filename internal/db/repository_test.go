@@ -52,7 +52,7 @@ func (s *TestSuite) SetUpTest() {
 
 func (s *TestSuite) TearDownTest() {
 	if err := s.session.DB(s.dbName).DropDatabase(); err != nil {
-		log.Fatal("failed to drop database, err: ", err)
+		log.Fatalf("failed to drop database, err: %v", err)
 	}
 	s.repo.Close()
 }
@@ -722,7 +722,7 @@ func Test_DeleteStaleServicesNoServicesUpdatedRecently(t *testing.T) {
 func findNamespace(name string) model.Namespace {
 	var n model.Namespace
 	if err := s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{"name": name}).One(&n); err != nil {
-		log.Fatal("failed to return namespace, err: ", err)
+		log.Fatalf("failed to return namespace, err: %v", err)
 	}
 	return n
 }
@@ -730,7 +730,7 @@ func findNamespace(name string) model.Namespace {
 func findAllNamespaces() []model.Namespace {
 	var nsList []model.Namespace
 	if err := s.repo.Db().C(constants.NamespacesCollection).Find(bson.M{}).All(&nsList); err != nil {
-		log.Fatal("failed to find all namespaces, err: ", err)
+		log.Fatalf("failed to find all namespaces, err: %v", err)
 	}
 	return nsList
 }
@@ -738,7 +738,7 @@ func findAllNamespaces() []model.Namespace {
 func findService(name string, namespace string) model.Service {
 	var svc model.Service
 	if err := s.repo.Db().C(constants.ServicesCollection).Find(bson.M{"namespace": namespace, "name": name}).One(&svc); err != nil {
-		log.Fatal("failed to find service, err: ", err)
+		log.Fatalf("failed to find service, err: %v", err)
 	}
 	return svc
 }
@@ -746,7 +746,7 @@ func findService(name string, namespace string) model.Service {
 func findAllServices() []model.Service {
 	var sList []model.Service
 	if err := s.repo.Db().C(constants.ServicesCollection).Find(bson.M{}).All(&sList); err != nil {
-		log.Fatal("failed to find all services, err: ", err)
+		log.Fatalf("failed to find all services, err: %v", err)
 	}
 	return sList
 }
@@ -755,7 +755,7 @@ func findAllServiceStatuses() []model.ServiceStatus {
 	var checks []model.ServiceStatus
 	collection := s.repo.Db().C(constants.HealthchecksCollection)
 	if err := collection.Find(bson.M{}).All(&checks); err != nil {
-		log.Fatal("failed to find all service statuses, err: ", err)
+		log.Fatalf("failed to find all service statuses, err: %v", err)
 	}
 
 	return checks

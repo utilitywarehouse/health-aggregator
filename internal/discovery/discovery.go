@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -288,9 +289,12 @@ func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error
 
 	switch k8sObject.(type) {
 	case corev1.Namespace:
-		ns := k8sObject.(corev1.Namespace)
-		annotations := ns.Annotations
 		var h model.HealthAnnotations
+		ns, ok := k8sObject.(corev1.Namespace)
+		if !ok {
+			return h, errors.New("failed to cast k8sObject to corev1.Namespace")
+		}
+		annotations := ns.Annotations
 		for k, v := range annotations {
 			if k == "uw.health.aggregator.port" {
 				h.Port = v
@@ -303,9 +307,12 @@ func getHealthAnnotations(k8sObject interface{}) (model.HealthAnnotations, error
 		}
 		return h, nil
 	case corev1.Service:
-		svc := k8sObject.(corev1.Service)
-		annotations := svc.Annotations
 		var h model.HealthAnnotations
+		svc, ok := k8sObject.(corev1.Service)
+		if !ok {
+			return h, errors.New("failed to cast k8sObject to corev1.Service")
+		}
+		annotations := svc.Annotations
 		for k, v := range annotations {
 			if k == "uw.health.aggregator.port" {
 				h.Port = v

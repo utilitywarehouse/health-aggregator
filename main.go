@@ -13,7 +13,7 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/google/uuid"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/utilitywarehouse/go-operational-health-checks/healthcheck"
