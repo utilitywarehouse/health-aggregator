@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/utilitywarehouse/health-aggregator/internal/helpers"
 	"github.com/utilitywarehouse/health-aggregator/internal/instrumentation"
@@ -21,6 +22,7 @@ import (
 )
 
 var (
+	namespaceName = "energy"
 	apiStub             *httptest.Server
 	healthyCheckReponse = `{
 		"name": "uw-foo",
@@ -66,11 +68,9 @@ func Test_DoHealthchecksForAHealthyService(t *testing.T) {
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
+	client, svc := setUpNamespaceWithService(t, 2)
 
-	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
-
-	err := attachPods(2, namespaceName, svc.Name, client)
+	err := attachPods(2, svc.Name, client)
 	require.NoError(t, err)
 
 	setupServerReturnHealthyPod()
@@ -103,11 +103,9 @@ func Test_DoHealthchecksForAnUnhealthyService(t *testing.T) {
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
+	client, svc := setUpNamespaceWithService(t, 2)
 
-	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
-
-	err := attachPods(2, namespaceName, svc.Name, client)
+	err := attachPods(2, svc.Name, client)
 	require.NoError(t, err)
 
 	setupServerReturnUnhealthyPod()
@@ -140,11 +138,9 @@ func Test_DoHealthchecksForADegradedService(t *testing.T) {
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
+	client, svc := setUpNamespaceWithService(t, 2)
 
-	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
-
-	err := attachPods(2, namespaceName, svc.Name, client)
+	err := attachPods(2, svc.Name, client)
 	require.NoError(t, err)
 
 	setupServerReturnDegradedPod()
@@ -177,11 +173,9 @@ func Test_DoHealthchecksWhenFewerThanDesiredPodsRunning(t *testing.T) {
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
+	client, svc := setUpNamespaceWithService(t, 2)
 
-	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
-
-	err := attachPods(1, namespaceName, svc.Name, client)
+	err := attachPods(1, svc.Name, client)
 	require.NoError(t, err)
 
 	setupServerReturnHealthyPod()
@@ -213,9 +207,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenNoPodsRunning(t *testing.T) {
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
-
-	client, svc := setUpNamespaceWithService(t, namespaceName, 2)
+	client, svc := setUpNamespaceWithService(t, 2)
 
 	checker := NewHealthChecker(client, instrumentation.SetupMetrics(), "")
 	go checker.DoHealthchecks(servicesToScrape, statusResponses, errs)
@@ -244,11 +236,9 @@ func Test_DoHealthchecksReportsUnhealthyWhenPodHealthCheckReturnServerError(t *t
 	statusResponses := make(chan model.ServiceStatus, 10)
 	servicesToScrape := make(chan model.Service, 10)
 
-	namespaceName := "energy"
+	client, svc := setUpNamespaceWithService(t, 1)
 
-	client, svc := setUpNamespaceWithService(t, namespaceName, 1)
-
-	err := attachPods(1, namespaceName, svc.Name, client)
+	err := attachPods(1, svc.Name, client)
 	require.NoError(t, err)
 
 	setupServerReturnError500()
@@ -274,7 +264,7 @@ func Test_DoHealthchecksReportsUnhealthyWhenPodHealthCheckReturnServerError(t *t
 	}
 }
 
-func setUpNamespaceWithService(t *testing.T, namespaceName string, desiredReplicas int) (*fake.Clientset, model.Service) {
+func setUpNamespaceWithService(t *testing.T, desiredReplicas int) (*fake.Clientset, model.Service) {
 
 	svc := helpers.GenerateDummyServiceForNamespace(namespaceName, desiredReplicas)
 
@@ -299,7 +289,7 @@ func setUpNamespaceWithService(t *testing.T, namespaceName string, desiredReplic
 	return client, svc
 }
 
-func attachPods(numRequired int, namespaceName string, serviceName string, client *fake.Clientset) error {
+func attachPods(numRequired int, serviceName string, client *fake.Clientset) error {
 	for i := 0; i < numRequired; i++ {
 		_, err := client.CoreV1().Pods(namespaceName).Create(
 			&v1.Pod{
@@ -320,7 +310,9 @@ func setupServerReturnHealthyPod() {
 	apiStub = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// return some json for the healthy pod
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(healthyCheckReponse))
+		if _, err := w.Write([]byte(healthyCheckReponse)); err != nil {
+			log.Error(err)
+		}
 	}))
 }
 
@@ -328,7 +320,9 @@ func setupServerReturnUnhealthyPod() {
 	apiStub = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// return some json for the unhealthy pod
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(unhealthyCheckReponse))
+		if _, err := w.Write([]byte(unhealthyCheckReponse)); err != nil {
+			log.Error(err)
+		}
 	}))
 }
 
@@ -336,7 +330,9 @@ func setupServerReturnDegradedPod() {
 	apiStub = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// return some json for the degraded pod
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(degradedCheckReponse))
+		if _, err := w.Write([]byte(degradedCheckReponse)); err != nil {
+			log.Error(err)
+		}
 	}))
 }
 

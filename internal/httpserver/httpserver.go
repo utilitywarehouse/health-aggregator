@@ -6,12 +6,11 @@ import (
 	"time"
 
 	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )
 
 // New creates a HTTP server. Receives port, routes and write and read timeout
-func New(port int, router *mux.Router, writeTimeout int, readTimeout int, allowedCorsMethods handlers.CORSOption, allowedCorsOrigins handlers.CORSOption) *http.Server {
+func New(port int, router http.Handler, writeTimeout int, readTimeout int, allowedCorsMethods handlers.CORSOption, allowedCorsOrigins handlers.CORSOption) *http.Server {
 	return &http.Server{
 		Handler: handlers.CORS(allowedCorsMethods, allowedCorsOrigins)(router),
 		Addr:    fmt.Sprintf(":%d", port),
